@@ -51,3 +51,23 @@ En Netlify también puede importarse el mismo repositorio con el soporte oficial
 - Botón **Escuchar mensaje** con síntesis de voz `SpeechSynthesis` del navegador, y botones de detener/cambiar mensaje. Depende de voces instaladas en el equipo; si no se ofrece síntesis, el texto permanece accesible. No requiere API de voz ni envía el mensaje a nuestro servidor (la implementación concreta de voces depende del navegador/SO).
 - Directorio de podcasts oficiales: Entiende tu mente, Psicología al Desnudo y Se Regalan Dudas. Los enlaces abren las plataformas originales, sin descargar ni redistribuir audio protegido.
 - Mejoras futuras: selección de voz/velocidad, episodios con RSS permitido y embeds oficiales tras revisar licencias, favoritos personales y accesibilidad.
+
+
+## Instalar como app en iPhone y Android (PWA)
+
+Tras desplegar en **HTTPS** (por ejemplo Vercel), abrir la URL:
+
+- **iPhone:** Safari → Compartir → **Agregar a pantalla de inicio** → Agregar. Se abre en modo app y con su propio icono.
+- **Android:** Chrome → menú ⋮ → **Instalar aplicación** o **Agregar a pantalla principal**. Puede mostrarse también el botón «📲 Instalar app».
+- **Escritorio:** navegadores compatibles pueden mostrar la opción de instalar.
+
+Se incluyeron `app/manifest.ts`, iconos PNG generados dinámicamente (`/pwa-icon/180`, `/pwa-icon/192`, `/pwa-icon/512`), `public/sw.js`, `app/offline/page.tsx` y un botón de instalación con guía para iOS.
+
+**Conexión:** el service worker guarda una versión pública básica de inicio y la página sin conexión; no almacena respuestas de las APIs ni datos personales. Las recetas, imágenes, videos, podcasts y datos nuevos requieren conexión. El peso y los hábitos continúan guardados localmente en cada dispositivo; **no se sincronizan entre iPhone y Android**.
+
+### Comprobaciones de publicación
+1. `npm install && npm run build`
+2. Abrir `/manifest.webmanifest` y revisar los iconos `/pwa-icon/192`, `/pwa-icon/512`, `/pwa-icon/180`
+3. Confirmar que `/sw.js` responde correctamente por HTTPS
+4. En Android revisar Chrome → Instalar aplicación; en iPhone Safari → Agregar a pantalla de inicio
+5. Activar modo avión tras haber visitado la app y confirmar la pantalla offline; volver a internet para recetas/videos
