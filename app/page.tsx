@@ -1,102 +1,648 @@
 'use client';
-import {useEffect,useState} from 'react';
+import {useEffect, useState} from 'react';
 import type {User} from '@supabase/supabase-js';
 import {getSupabase} from '../lib/supabase';
-import {Activity,ArrowUpRight,BookOpen,CalendarDays,Check,ChevronRight,Dumbbell,Heart,Info,Plus,Search,Scale,Utensils,Video,X,Headphones,Volume2,VolumeX,Shuffle,ExternalLink} from 'lucide-react';
-import {weeklyPlan,demoExercises,guidedExercises} from '../lib/exercises';
-type Recipe={id:string,title:string,image:string,category:string,origin:string,source:string,video:string,instructions:string,ingredients:{name:string,amount:string}[]};
-type Exercise={id:string,title:string,image:string,category:string,equipment:string,source:string,video:string,description:string};
-type Weight={date:string,kg:number};
-type FamilyProfile={id:string;name:string;goal:string;avatar:string};
-const profileStorage=(id:string,key:string)=>'va-family:'+id+':'+key;
-const initialWeight:Weight[]=[];
-const menu=[{id:'overview',name:'Mi progreso',icon:Scale},{id:'recipes',name:'Recetas web',icon:Utensils},{id:'exercises',name:'Ejercicios',icon:Dumbbell},{id:'plan',name:'Plan semanal',icon:CalendarDays},{id:'motivation',name:'Motivación y audio',icon:Headphones}];
-const reflections=[
- {author:'James Clear',theme:'Hábitos pequeños',message:'No necesitas transformar toda tu vida hoy. Una acción sencilla y repetida puede convertirse en el comienzo de un hábito duradero.'},
- {author:'Carol Dweck',theme:'Mentalidad de crecimiento',message:'Una dificultad no define tus capacidades. Observa lo que puedes aprender y vuelve a intentarlo con un paso alcanzable.'},
- {author:'Viktor Frankl',theme:'Sentido y propósito',message:'Recuerda qué es importante para ti. Dar sentido a tus decisiones puede ayudarte a perseverar incluso en días difíciles.'},
- {author:'Brené Brown',theme:'Autocompasión',message:'El progreso no exige perfección. Puedes reconocer tus errores, tratarte con respeto y seguir avanzando.'},
- {author:'Stephen Covey',theme:'Decisiones cotidianas',message:'Concéntrate en lo que puedes hacer hoy: preparar una comida, caminar unos minutos o descansar a tiempo.'},
- {author:'Angela Duckworth',theme:'Constancia',message:'Tu valor no depende de la rapidez con que avances. La constancia también se construye con pausas, ajustes y nuevos intentos.'}
+import {
+  ArrowUpRight, CalendarDays, Check, Dumbbell, ExternalLink, Headphones, Heart, Info, LogOut, Plus, Scale, Settings2, Shuffle, Utensils, Volume2, Square,
+} from 'lucide-react';
+import {weeklyPlan} from '../lib/exercises';
+import {setSpeechTokenProvider, speak, stopSpeech, useSpeech} from '../lib/speech';
+import {AudioBar, ListenButton, VoiceSettings} from '../components/Audio';
+import RecipesView from '../components/RecipesView';
+import ExercisesView from '../components/ExercisesView';
+
+type Weight = {date: string; kg: number};
+type Profile = {id: string; name: string; initial: string};
+
+const menu = [
+  {id: 'overview', name: 'Mi progreso', short: 'Progreso', icon: Scale},
+  {id: 'recipes', name: 'Recetas', short: 'Recetas', icon: Utensils},
+  {id: 'exercises', name: 'Ejercicios', short: 'Ejercicios', icon: Dumbbell},
+  {id: 'plan', name: 'Plan semanal', short: 'Plan', icon: CalendarDays},
+  {id: 'motivation', name: 'Motivación y audio', short: 'Audio', icon: Headphones},
+] as const;
+type Tab = (typeof menu)[number]['id'];
+
+const reflections = [
+  {author: 'James Clear', theme: 'Hábitos pequeños', message: 'No necesitas transformar toda tu vida hoy. Una acción sencilla, repetida con cariño, puede convertirse en el comienzo de un hábito que dure.'},
+  {author: 'Carol Dweck', theme: 'Mentalidad de crecimiento', message: 'Una dificultad no define lo que eres capaz de hacer. Mira qué puedes aprender de ella, y vuelve a intentarlo con un paso que esté a tu alcance.'},
+  {author: 'Viktor Frankl', theme: 'Sentido y propósito', message: 'Recuerda qué es lo importante para ti. Cuando tus decisiones tienen sentido, es más fácil seguir adelante, incluso en los días difíciles.'},
+  {author: 'Brené Brown', theme: 'Autocompasión', message: 'El progreso no exige perfección. Puedes reconocer tus errores, tratarte con respeto, y seguir avanzando.'},
+  {author: 'Stephen Covey', theme: 'Decisiones cotidianas', message: 'Concéntrate en lo que sí puedes hacer hoy: preparar una comida rica, caminar unos minutos, o descansar a tiempo.'},
+  {author: 'Angela Duckworth', theme: 'Constancia', message: 'Tu valor no depende de qué tan rápido avances. La constancia también se construye con pausas, ajustes, y nuevos intentos.'},
 ];
-const podcasts=[
- {title:'Entiende tu mente',topic:'Psicología cotidiana y cambios de hábitos',desc:'Conversaciones breves para comprender emociones, decisiones y bienestar.',url:'https://entiendetumente.info/',tag:'Hábitos'},
- {title:'Psicología al Desnudo',topic:'Salud emocional y autoconocimiento',desc:'Episodios de Marina Mammoliti sobre emociones, vínculos y bienestar.',url:'https://www.psimammoliti.com/recursos/podcasts',tag:'Autoconocimiento'},
- {title:'Se Regalan Dudas',topic:'Crecimiento personal y conversaciones honestas',desc:'Diálogos sobre amor propio, bienestar emocional y relaciones.',url:'https://www.seregalandudas.com/',tag:'Bienestar'}
+const podcasts = [
+  {title: 'Entiende tu mente', topic: 'Psicología cotidiana y hábitos', desc: 'Conversaciones breves para comprender emociones, decisiones y bienestar.', url: 'https://entiendetumente.info/', tag: 'Hábitos'},
+  {title: 'Psicología al Desnudo', topic: 'Salud emocional y autoconocimiento', desc: 'Episodios de Marina Mammoliti sobre emociones, vínculos y bienestar.', url: 'https://www.psimammoliti.com/recursos/podcasts', tag: 'Autoconocimiento'},
+  {title: 'Se Regalan Dudas', topic: 'Crecimiento personal', desc: 'Diálogos sobre amor propio, bienestar emocional y relaciones.', url: 'https://www.seregalandudas.com/', tag: 'Bienestar'},
 ];
-const formatKg=(n:number)=>n.toLocaleString('es-CL',{maximumFractionDigits:1});
-const safeLink=(url:string)=>/^https:\/\//i.test(url)?url:'#';
-function PersonalDashboard({profile,user}:{profile:FamilyProfile;user:User}){
- const [syncStatus,setSyncStatus]=useState('Cargando datos privados...'),[exerciseFilter,setExerciseFilter]=useState('Todos'),[exerciseDone,setExerciseDone]=useState<string[]>([]),[activeExercise,setActiveExercise]=useState<string|null>(null),[audioText,setAudioText]=useState(''),[tab,setTab]=useState('overview'),[weights,setWeights]=useState<Weight[]>(initialWeight),[weightInput,setWeightInput]=useState(''),[dateInput,setDateInput]=useState('2026-11-23'),[checked,setChecked]=useState<string[]>([]),[favorites,setFavorites]=useState<string[]>([]),[query,setQuery]=useState('pollo'),[recipes,setRecipes]=useState<Recipe[]>([]),[exercises,setExercises]=useState<Exercise[]>([]),[loading,setLoading]=useState(false),[exLoading,setExLoading]=useState(true),[sourceError,setSourceError]=useState(''),[exerciseError,setExerciseError]=useState(''),[selected,setSelected]=useState<Recipe|null>(null),[ready,setReady]=useState(false),[reflectionIndex,setReflectionIndex]=useState(0),[speaking,setSpeaking]=useState(false),[speechSupported,setSpeechSupported]=useState(false);
- useEffect(()=>{let cancelled=false;const supabase=getSupabase();setSpeechSupported('speechSynthesis' in window);setDateInput(new Date().toLocaleDateString('en-CA'));if(!supabase)return;
- (async()=>{const {data,error}=await supabase.from('wellness_data').select('weights,checks,favorites,exercises_done').eq('user_id',user.id).maybeSingle();
- if(cancelled)return;if(error){setSyncStatus('No se pudo cargar tu información: '+error.message);return;}
- if(data){if(Array.isArray(data.weights))setWeights(data.weights);if(Array.isArray(data.checks))setChecked(data.checks);if(Array.isArray(data.favorites))setFavorites(data.favorites);if(Array.isArray(data.exercises_done))setExerciseDone(data.exercises_done)}
- setSyncStatus('Datos privados sincronizados');setReady(true);
- })();return()=>{cancelled=true};},[user.id]);
- useEffect(()=>{if(!ready)return;const supabase=getSupabase();if(!supabase)return;
- const timeout=setTimeout(async()=>{setSyncStatus('Guardando...');const {error}=await supabase.from('wellness_data').upsert({user_id:user.id,weights,checks:checked,favorites,exercises_done:exerciseDone,updated_at:new Date().toISOString()},{onConflict:'user_id'});
- setSyncStatus(error?'No se pudo guardar: '+error.message:'Datos privados sincronizados')},600);
- return()=>clearTimeout(timeout);
- },[weights,checked,favorites,exerciseDone,ready,user.id]);
- async function findRecipes(q=query){setLoading(true);setSourceError('');try{const r=await fetch('/api/recipes?q='+encodeURIComponent(q));const d=await r.json();setRecipes(d.items||[]);if(!r.ok)setSourceError(d.error||'Servicio no disponible')}catch{setRecipes([]);setSourceError('No fue posible conectar con el servicio.')}finally{setLoading(false)}}
- useEffect(()=>{findRecipes('pollo');fetch('/api/exercises').then(r=>r.json()).then(d=>{if(d.error)setExerciseError(d.error);setExercises(d.items||[])}).catch(()=>setExerciseError('Fuente externa no disponible')).finally(()=>setExLoading(false))},[]);
- useEffect(()=>()=>{if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.cancel()},[]);
- function speakText(text:string){if(typeof window==='undefined'||!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text.slice(0,12000));utterance.lang='es-CL';utterance.rate=0.9;utterance.onend=()=>{setSpeaking(false);setAudioText('')};utterance.onerror=()=>{setSpeaking(false);setAudioText('')};window.speechSynthesis.speak(utterance);setAudioText(text);setSpeaking(true)}
- function stopAudio(){setAudioText('');if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.cancel();setSpeaking(false)}
- function playReflection(){speakText(reflections[reflectionIndex].message)}
- function nextReflection(){stopAudio();setReflectionIndex(i=>(i+1)%reflections.length)}
- const sorted=[...weights].sort((a,b)=>a.date.localeCompare(b.date));const current=sorted[sorted.length-1]?.kg;const first=sorted[0]?.kg;const delta=current!==undefined&&first!==undefined?+(first-current).toFixed(1):undefined;
- function addWeight(){const n=Number(weightInput.replace(',','.'));if(!Number.isFinite(n)||n<25||n>350||!/^\d{4}-\d{2}-\d{2}$/.test(dateInput))return;setWeights(prev=>[...prev.filter(x=>x.date!==dateInput),{date:dateInput,kg:n}]);setWeightInput('')}
- function toggle(id:string,values:string[],setter:(v:string[])=>void){setter(values.includes(id)?values.filter(x=>x!==id):[...values,id])}
- const media=(url:string,alt:string)=><div className="photo">{url?<img src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer"/>:<div className="image-fallback"><Dumbbell size={36}/></div>}</div>;
- return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brand-icon"><Heart size={23} fill="currentColor"/></div><div><b>vida<span>activa</span></b><small>Tu bienestar, a tu ritmo</small></div></div><div className="sidebar-label">TU ESPACIO</div><nav>{menu.map(({id,name,icon:Icon})=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon size={19}/>{name}<ChevronRight className="nav-arrow" size={16}/></button>)}</nav><div className="sidebar-bottom"><div className="tiny-label">OBJETIVO PERSONAL</div><strong>Hábitos sostenibles</strong><p>Pequeños avances que puedes mantener cada semana.</p><div className="health-note"><Info size={16}/> No sustituye una evaluación médica.</div></div></aside>
- <main><header className="topbar"><span><span className="online-dot"/> Hola, {profile.name} · {profile.goal}</span><div className="avatar">{profile.avatar}</div></header><div className="content">{!ready&&<div className="callout"><Info size={18}/>{syncStatus}</div>}<div style={{display:'flex',gap:10,alignItems:'center',marginBottom:18,flexWrap:'wrap'}}><button className="secondary-action" disabled={!speechSupported} onClick={()=>{if(speaking){stopAudio();return}const main=document.querySelector('.content');const clone=main?.cloneNode(true) as HTMLElement|undefined;clone?.querySelectorAll('button,input,svg,a').forEach(x=>x.remove());speakText(clone?.innerText||'')}}>{speaking?<VolumeX size={18}/>:<Volume2 size={18}/>} {speaking?'Detener lectura':'Escuchar este módulo'}</button><span style={{fontSize:12,color:'#667b73'}}>Audio en español · voz del dispositivo · {syncStatus}</span></div>
- {tab==='overview'&&<><div className="eyebrow">RESUMEN PERSONAL</div><h1>Tu progreso, <em>paso a paso.</em></h1><p className="lead">Más que un número: construyamos hábitos para sentirte mejor cada día.</p><div className="stats"><div className="stat"><span>PESO ACTUAL</span><strong>{current===undefined?'—':formatKg(current)} <small>kg</small></strong><p>Última medición registrada</p></div><div className="stat"><span>CAMBIO ACUMULADO</span><strong className="green">{delta===undefined?'—':`${delta>=0?'−':'+'}${formatKg(Math.abs(delta))}`} <small>kg</small></strong><p>Desde tu primer registro</p></div><div className="stat"><span>PLAN DE ACTIVIDAD</span><strong>{checked.length}<small> / 7 días</small></strong><p>Sesiones marcadas esta semana</p></div></div><div className="two"><section className="panel"><div className="panel-heading"><div><div className="eyebrow">SEGUIMIENTO</div><h2>Evolución de peso</h2></div><Scale size={20} color="#7a9089"/></div><div className="graph"><div className="axis"><span>{sorted.length?`${Math.ceil(Math.max(...sorted.map(w=>w.kg))+2)} kg`:'—'}</span><span>{sorted.length?`${Math.floor(Math.min(...sorted.map(w=>w.kg))-2)} kg`:'—'}</span></div><svg viewBox="0 0 530 200" preserveAspectRatio="none" aria-label="Gráfico de progreso de peso"><line x1="0" y1="48" x2="530" y2="48" stroke="#e8ede9"/><line x1="0" y1="105" x2="530" y2="105" stroke="#e8ede9"/><line x1="0" y1="162" x2="530" y2="162" stroke="#e8ede9"/>{sorted.length>1&&<polyline points={sorted.map((w,i)=>`${i*530/(sorted.length-1)},${20+(Math.max(...sorted.map(x=>x.kg))-w.kg)/(Math.max(...sorted.map(x=>x.kg))-Math.min(...sorted.map(x=>x.kg))||1)*155}`).join(' ')} stroke="#438f74" strokeWidth="3.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>}{sorted.map((w,i)=><circle key={w.date} cx={sorted.length>1?i*530/(sorted.length-1):265} cy={20+(Math.max(...sorted.map(x=>x.kg))-w.kg)/(Math.max(...sorted.map(x=>x.kg))-Math.min(...sorted.map(x=>x.kg))||1)*155} r="5" fill="#438f74"/>)}</svg></div><div className="chart-bottom">{sorted.slice(-5).map(w=><span key={w.date}>{w.date.slice(5).replace('-','/')}</span>)}</div><div className="note">La balanza fluctúa: compara promedios semanales y observa también tu energía y fuerza.</div></section><section className="panel"><div className="panel-heading"><div><div className="eyebrow">NUEVA MEDICIÓN</div><h2>Registra tu peso</h2></div><Plus size={20} color="#7a9089"/></div><label className="inputlabel">Fecha</label><input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)}/><label className="inputlabel">Peso (kg)</label><input type="number" min="25" max="350" step="0.1" placeholder="Ej. 108,2" value={weightInput} onChange={e=>setWeightInput(e.target.value)}/><button className="primary full" disabled={!ready} onClick={addWeight}>Guardar medición <ArrowUpRight size={17}/></button><p className="privacy">🔒 Los datos se almacenan en tu cuenta privada y se sincronizan entre dispositivos.</p></section></div><section className="banner"><div><div className="eyebrow">TU SIGUIENTE PASO</div><h2>Alimentarte bien y moverte más, sin extremos.</h2><p>Explora preparaciones con ingredientes reales y una rutina inicial adaptable.</p><button onClick={()=>setTab('recipes')}>Explorar recetas <ArrowUpRight size={17}/></button></div><div className="banner-mark"><Utensils size={90} strokeWidth={1}/></div></section></>}
- {tab==='recipes'&&<><div className="eyebrow">INSPIRACIÓN DESDE LA WEB</div><h1>Comer rico también es <em>cuidarte.</em></h1><p className="lead">Busca recetas reales con fotografías, ingredientes, preparación y videos cuando estén disponibles.</p><div className="searchline"><Search size={20}/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&findRecipes()} placeholder="Busca en español: pollo, pescado, ensalada..."/><button className="primary" onClick={()=>findRecipes()}>Buscar</button></div><div className="hint"><Info size={15}/> Recetas originales en español. No se estiman calorías sin una base nutricional verificada.</div>{sourceError&&<div className="error">{sourceError} · Intenta otra vez.</div>}{loading?<div className="empty">Consultando recetas...</div>:recipes.length===0?<div className="empty">No hay recetas para esa búsqueda. Prueba “pollo”, “pescado” o “ensalada”.</div>:<div className="cards">{recipes.map(m=><article className="recipe-card" key={m.id}>{media(m.image,m.title)}<div className="rcbody"><div className="meta">{m.category||'Receta'} {m.origin?'· '+m.origin:''}</div><h3>{m.title}</h3><div className="rcbottom"><button className="textbutton" onClick={()=>setSelected(m)}>Ver receta <ChevronRight size={16}/></button><button title="Guardar favorito" aria-label="Guardar favorito" className={'heart '+(favorites.includes(m.id)?'saved':'')} onClick={()=>toggle(m.id,favorites,setFavorites)}><Heart size={20} fill={favorites.includes(m.id)?'currentColor':'none'}/></button></div></div></article>)}</div>}<p className="attribution">Recetas originales de Vida Activa AI en español. Consulta cada ficha para ingredientes y preparación.</p></>}
- {tab==='exercises'&&<><div className="eyebrow">ENTRENAMIENTO GUIADO EN ESPAÑOL</div><h1>Muévete a <em>tu ritmo.</em></h1><p className="lead">Rutinas iniciales de baja intensidad, con instrucciones por voz, filtros y seguimiento local.</p><div className="callout"><Info size={20}/><div>Empieza con sesiones cortas y cómodas. Si tienes problemas cardíacos o respiratorios, consulta antes de aumentar la intensidad. Detente ante dolor torácico, mareos o falta de aire inusual.</div></div><div className="stats"><div className="stat"><span>EJERCICIOS COMPLETADOS</span><strong>{exerciseDone.length}</strong><p>Registros guardados en este dispositivo</p></div><div className="stat"><span>CATÁLOGO GUIADO</span><strong>{guidedExercises.length}</strong><p>Actividades de nivel inicial</p></div><div className="stat"><span>INTENSIDAD SUGERIDA</span><strong style={{fontSize:24}}>Suave</strong><p>Debes poder conversar durante el esfuerzo</p></div></div><div style={{display:'flex',flexWrap:'wrap',gap:8,margin:'20px 0'}}>{['Todos','Cardio','Fuerza','Movilidad'].map(cat=><button key={cat} className={exerciseFilter===cat?'primary':'secondary-action'} onClick={()=>setExerciseFilter(cat)}>{cat}</button>)}</div><div className="cards">{guidedExercises.filter(e=>exerciseFilter==='Todos'||e.category===exerciseFilter).map(e=><article className="recipe-card" key={e.id}><div className="rcbody"><div className="meta">{e.category} · {e.level} · {e.minutes} min</div><h3>{e.title}</h3><p className="exercise-desc">{e.description}</p><p className="exercise-desc"><strong>Material:</strong> {e.equipment}</p><div className="rcbottom"><button className="textbutton" onClick={()=>{stopAudio();setActiveExercise(activeExercise===e.id?null:e.id)}}>{activeExercise===e.id?'Ocultar guía':'Ver guía paso a paso'} <ChevronRight size={16}/></button></div>{activeExercise===e.id&&<div style={{paddingTop:12}}><ol style={{paddingLeft:22,lineHeight:1.7}}>{e.steps.map((step,i)=><li key={i}>{step}</li>)}</ol><div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:12}}><button className="secondary-action" disabled={!speechSupported} onClick={()=>speaking?stopAudio():speakText(e.title+'. '+e.steps.join('. '))}>{speaking?<VolumeX size={17}/>:<Volume2 size={17}/>} {speaking?'Detener':'Escuchar instrucciones'}</button><a className="textbutton" href={'https://www.youtube.com/results?search_query='+encodeURIComponent(e.videoSearch)} target="_blank" rel="noopener noreferrer"><Video size={16}/> Buscar video demostrativo</a></div><p className="audio-note">El enlace abre una búsqueda de videos; no se ha verificado un video específico.</p></div>}<button className="secondary-action" style={{marginTop:14}} onClick={()=>setExerciseDone(prev=>prev.includes(e.id)?prev.filter(id=>id!==e.id):[...prev,e.id])}>{exerciseDone.includes(e.id)?'✓ Completado · Desmarcar':'Marcar como completado'}</button></div></article>)}</div><div className="podcast-heading"><div><div className="eyebrow">BIBLIOTECA EXTERNA</div><h2>Más ejercicios de wger</h2></div></div>{exerciseError&&<div className="error">{exerciseError}. Las guías locales siguen disponibles.</div>}{exLoading?<div className="empty">Consultando biblioteca externa...</div>:<div className="cards">{(exercises.length?exercises:demoExercises).map(m=><article className="recipe-card" key={m.id}>{media(m.image,m.title)}<div className="rcbody"><div className="meta">{m.category||'Ejercicio'}</div><h3>{m.title}</h3><p className="exercise-desc">{m.description||'Consulta la ficha original para más detalles.'}</p><div className="rcbottom"><a className="textbutton" href={safeLink(m.source)} target="_blank" rel="noopener noreferrer">Ver fuente <ArrowUpRight size={15}/></a>{m.video&&<a className="video" href={safeLink(m.video)} target="_blank" rel="noopener noreferrer"><Video size={16}/> Video</a>}</div></div></article>)}</div>}<p className="attribution">Las guías iniciales son contenido local de Vida Activa AI. La biblioteca externa pertenece a wger; su disponibilidad y traducciones pueden variar.</p></>}
- {tab==='motivation'&&<><div className="eyebrow">UN ESPACIO PARA VOLVER A EMPEZAR</div><h1>Tu bienestar también <em>se escucha.</em></h1><p className="lead">Escucha una reflexión breve en español y descubre podcasts sobre hábitos, autoestima y superación personal. Tu progreso no necesita ser perfecto.</p><section className="motivation-hero"><div className="eyebrow">REFLEXIÓN DE HOY · TEXTO ORIGINAL</div><div className="motivation-topic">{reflections[reflectionIndex].theme}</div><p className="motivation-message">“{reflections[reflectionIndex].message}”</p><p className="motivation-author">Reflexión original relacionada con ideas de {reflections[reflectionIndex].author}. No es una cita textual del autor.</p><div className="motivation-actions"><button className="primary" disabled={!speechSupported} onClick={speaking?stopAudio:playReflection}>{speaking?<VolumeX size={18}/>:<Volume2 size={18}/>} {speaking?'Detener audio':'Escuchar mensaje'}</button><button className="secondary-action" onClick={nextReflection}><Shuffle size={18}/> Otro mensaje</button></div>{!speechSupported&&<p className="audio-note">Tu navegador no ofrece lectura de voz. Puedes leer la reflexión en pantalla.</p>}<p className="audio-note">La narración usa la voz en español disponible en tu dispositivo. No se guardan grabaciones.</p></section><div className="podcast-heading"><div><div className="eyebrow">PODCASTS EN ESPAÑOL</div><h2>Escucha y aprende a tu ritmo</h2></div><Headphones color="#438f74"/></div><div className="podcast-grid">{podcasts.map((podcast,i)=><article className="podcast-card" key={podcast.title}><div className="podcast-symbol"><Headphones size={25}/></div><span className="podcast-tag">{podcast.tag}</span><h3>{podcast.title}</h3><p className="podcast-topic">{podcast.topic}</p><p>{podcast.desc}</p><a href={podcast.url} target="_blank" rel="noopener noreferrer" className="podcast-link">Escuchar en la plataforma original <ExternalLink size={16}/></a></article>)}</div><div className="callout"><Info size={20}/><div>Los podcasts pertenecen a sus creadores. Abrimos sus sitios oficiales para escucharlos; no copiamos ni redistribuimos sus grabaciones. Estas reflexiones son apoyo para hábitos saludables, no un tratamiento psicológico.</div></div></>}
- {tab==='plan'&&<><div className="eyebrow">MOVIMIENTO SEMANAL</div><h1>Una semana <em>a tu manera.</em></h1><p className="lead">Un punto de partida de baja intensidad, ajustable a tu condición y disponibilidad.</p><div className="schedule">{weeklyPlan.map((d,i)=><div className={'day '+(checked.includes(d.day)?'done':'')} key={d.day}><div className="daynumber">{String(i+1).padStart(2,'0')}</div><div className="dayinfo"><span>{d.day.toUpperCase()} · {d.duration}</span><h3>{d.label}</h3><p>{d.details}</p></div><button onClick={()=>toggle(d.day,checked,setChecked)} aria-label={'Marcar '+d.day} className="checkbutton">{checked.includes(d.day)?<Check size={20}/>:<span/>}</button></div>)}</div><div className="callout"><Info size={20}/><div>Esta rutina es orientativa y no personalizada clínicamente. Los días marcados se guardan solo en este navegador; puedes desmarcarlos para iniciar otra semana.</div></div></>}
- </div></main>{selected&&<div className="overlay" onClick={()=>setSelected(null)}><div className="modal" role="dialog" aria-modal="true" aria-label={selected.title} onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setSelected(null)} aria-label="Cerrar"><X size={22}/></button>{selected.image&&<img className="modal-cover" src={selected.image} alt={selected.title}/>}<div className="modal-content"><div className="eyebrow">{selected.category} · {selected.origin}</div><h2>{selected.title}</h2><div className="modal-links"><a href={safeLink(selected.source)} target="_blank" rel="noopener noreferrer">Fuente de la receta <ArrowUpRight size={15}/></a>{selected.video&&<a href={safeLink(selected.video)} target="_blank" rel="noopener noreferrer"><Video size={16}/> Ver video original</a>}</div><button className="secondary-action" disabled={!speechSupported} onClick={()=>speaking?stopAudio():speakText(`${selected.title}. Ingredientes: ${selected.ingredients.map(v=>`${v.amount} ${v.name}`).join(', ')}. Preparación: ${selected.instructions}`)}>{speaking?<VolumeX size={18}/>:<Volume2 size={18}/>} {speaking?'Detener audio':'Escuchar receta completa'}</button><h3>Ingredientes</h3><ul>{selected.ingredients.map((v,i)=><li key={i}>{v.amount} {v.name}</li>)}</ul><h3>Preparación</h3><p className="steps">{selected.instructions||'Consulta la fuente original.'}</p><div className="hint">No hay calorías verificadas para esta receta. Porciones y necesidades individuales pueden variar.</div></div></div></div>}</div>;
+
+const formatKg = (n: number) => n.toLocaleString('es-CL', {maximumFractionDigits: 1});
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
+};
+
+function WeightChart({data}: {data: Weight[]}) {
+  if (!data.length) return <div className="chart-empty">Registra tu primera medición para ver tu evolución aquí.</div>;
+  const W = 560, H = 200, P = 18;
+  const max = Math.max(...data.map(d => d.kg)) + 1;
+  const min = Math.min(...data.map(d => d.kg)) - 1;
+  const x = (i: number) => (data.length > 1 ? P + (i * (W - 2 * P)) / (data.length - 1) : W / 2);
+  const y = (kg: number) => P + ((max - kg) / (max - min || 1)) * (H - 2 * P);
+  const line = data.map((d, i) => `${x(i)},${y(d.kg)}`).join(' ');
+  const area = `${x(0)},${H} ${line} ${x(data.length - 1)},${H}`;
+  return (
+    <div className="chart">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Gráfico de evolución de peso">
+        <defs>
+          <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor="var(--brand)" stopOpacity=".25" />
+            <stop offset="1" stopColor="var(--brand)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map(f => (
+          <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="var(--line)" />
+        ))}
+        {data.length > 1 && <polygon points={area} fill="url(#g)" />}
+        {data.length > 1 && <polyline points={line} fill="none" stroke="var(--brand)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+        {data.map((d, i) => (
+          <circle key={d.date} cx={x(i)} cy={y(d.kg)} r="4.5" fill="#fff" stroke="var(--brand)" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+        ))}
+      </svg>
+      <div className="chart-x">
+        {data.slice(-6).map(d => (
+          <span key={d.date}>
+            {d.date.slice(8, 10)}/{d.date.slice(5, 7)} · <b>{formatKg(d.kg)}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-export default function Page(){
- const supabase=getSupabase();
- const [user,setUser]=useState<User|null>(null);
- const [loadingAuth,setLoadingAuth]=useState(true);
- const [mode,setMode]=useState<'login'|'signup'>('login');
- const [email,setEmail]=useState('');
- const [password,setPassword]=useState('');
- const [name,setName]=useState('');
- const [message,setMessage]=useState('');
- const [busy,setBusy]=useState(false);
- useEffect(()=>{if(!supabase){setLoadingAuth(false);return}
- let active=true;
- supabase.auth.getUser().then(({data})=>{if(active){setUser(data.user);setLoadingAuth(false)}}).catch(()=>{if(active)setLoadingAuth(false)});
- const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{if(active){setUser(session?.user||null);setLoadingAuth(false)}});
- return()=>{active=false;subscription.unsubscribe()};
- },[supabase]);
- async function submitAuth(e:React.FormEvent){e.preventDefault();if(!supabase)return;setBusy(true);setMessage('');
- try{
- if(mode==='signup'){if(name.trim().length<2){setMessage('Escribe un nombre de al menos dos caracteres.');return}
- const {error}=await supabase.auth.signUp({email:email.trim(),password,options:{data:{display_name:name.trim().slice(0,40)}}});
- if(error)throw error;setMessage('Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
- }else{const {error}=await supabase.auth.signInWithPassword({email:email.trim(),password});if(error)throw error;}
- }catch(err){setMessage(err instanceof Error?err.message:'No se pudo completar la solicitud.')}finally{setBusy(false)}
- }
- if(!supabase)return <div className="shell"><main><div className="content" style={{maxWidth:650,margin:'60px auto'}}><h1>Vida Activa <em>Familia</em></h1><div className="callout"><Info size={22}/><div>Para habilitar cuentas privadas, configura Supabase y las variables NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel. Consulta FAMILY_AUTH_SETUP.md en GitHub.</div></div></div></main></div>;
- if(loadingAuth)return <div className="shell"><main><div className="content">Verificando tu sesión segura...</div></main></div>;
- if(user){const profile:FamilyProfile={id:user.id,name:String(user.user_metadata?.display_name||user.email?.split('@')[0]||'Mi espacio'),goal:'Bienestar personal',avatar:'💚'};
- return <><div style={{position:'fixed',right:12,bottom:12,zIndex:1000}}><button className="primary" onClick={()=>supabase.auth.signOut()}>Cerrar sesión</button></div><PersonalDashboard key={user.id} user={user} profile={profile}/></>}
- return <div className="shell"><main><div className="content" style={{maxWidth:560,margin:'48px auto'}}>
- <div className="eyebrow">VIDA ACTIVA AI · FAMILIA</div><h1>Tu bienestar, <em>tu cuenta.</em></h1><p className="lead">Cada integrante utiliza su propia cuenta y conserva sus registros privados al cambiar de dispositivo.</p>
- <section className="panel"><h2>{mode==='login'?'Iniciar sesión':'Crear cuenta personal'}</h2>
- <form onSubmit={submitAuth}>{mode==='signup'&&<><label className="inputlabel" htmlFor="signup-name">Nombre o apodo</label><input id="signup-name" required minLength={2} maxLength={40} value={name} onChange={e=>setName(e.target.value)}/></>}
- <label className="inputlabel" htmlFor="auth-email">Correo electrónico</label><input id="auth-email" type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/>
- <label className="inputlabel" htmlFor="auth-password">Contraseña</label><input id="auth-password" type="password" required minLength={8} autoComplete={mode==='signup'?'new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)}/>
- <button className="primary full" disabled={busy} type="submit">{busy?'Procesando...':mode==='login'?'Entrar a mi cuenta':'Registrarme'}</button></form>
- {message&&<p role="status" style={{marginTop:12}}>{message}</p>}
- <button className="secondary-action" style={{marginTop:14}} onClick={()=>{setMode(mode==='login'?'signup':'login');setMessage('')}}>{mode==='login'?'Crear una cuenta nueva':'Ya tengo cuenta'}</button>
- </section><div className="callout" style={{marginTop:18}}><Info size={20}/><div>Los datos de cada cuenta se aíslan mediante reglas de acceso en la base de datos. No compartas contraseñas. Las cuentas infantiles y la administración familiar requieren una fase adicional.</div></div>
- </div></main></div>;
+function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; onSignOut: () => void}) {
+  const [tab, setTab] = useState<Tab>('overview');
+  const [syncStatus, setSyncStatus] = useState('Cargando tus datos…');
+  const [ready, setReady] = useState(false);
+  const [weights, setWeights] = useState<Weight[]>([]);
+  const [checked, setChecked] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [exerciseDone, setExerciseDone] = useState<string[]>([]);
+  const [weightInput, setWeightInput] = useState('');
+  const [dateInput, setDateInput] = useState('');
+  const [weightMsg, setWeightMsg] = useState('');
+  const [reflectionIndex, setReflectionIndex] = useState(0);
+  const [showVoice, setShowVoice] = useState(false);
+  const speech = useSpeech();
+
+  useEffect(() => {
+    setDateInput(new Date().toLocaleDateString('en-CA'));
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setSpeechTokenProvider(async () => (await supabase.auth.getSession()).data.session?.access_token || null);
+    let cancelled = false;
+    (async () => {
+      const {data, error} = await supabase.from('wellness_data').select('weights,checks,favorites,exercises_done').eq('user_id', user.id).maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        setSyncStatus('No se pudo cargar tu información: ' + error.message);
+        return;
+      }
+      if (data) {
+        if (Array.isArray(data.weights)) setWeights(data.weights);
+        if (Array.isArray(data.checks)) setChecked(data.checks);
+        if (Array.isArray(data.favorites)) setFavorites(data.favorites);
+        if (Array.isArray(data.exercises_done)) setExerciseDone(data.exercises_done);
+      }
+      setSyncStatus('Sincronizado');
+      setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const t = setTimeout(async () => {
+      setSyncStatus('Guardando…');
+      const {error} = await supabase
+        .from('wellness_data')
+        .upsert({user_id: user.id, weights, checks: checked, favorites, exercises_done: exerciseDone, updated_at: new Date().toISOString()}, {onConflict: 'user_id'});
+      setSyncStatus(error ? 'No se pudo guardar: ' + error.message : 'Sincronizado');
+    }, 600);
+    return () => clearTimeout(t);
+  }, [weights, checked, favorites, exerciseDone, ready, user.id]);
+
+  useEffect(() => {
+    stopSpeech();
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }, [tab]);
+
+  const toggleIn = (setter: React.Dispatch<React.SetStateAction<string[]>>) => (id: string) => setter(v => (v.includes(id) ? v.filter(x => x !== id) : [...v, id]));
+
+  const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date));
+  const current = sorted.at(-1)?.kg;
+  const first = sorted[0]?.kg;
+  const delta = current !== undefined && first !== undefined ? +(first - current).toFixed(1) : undefined;
+  const todayIndex = (new Date().getDay() + 6) % 7;
+  const today = weeklyPlan[todayIndex];
+
+  function addWeight() {
+    const n = Number(weightInput.replace(',', '.'));
+    if (!Number.isFinite(n) || n < 25 || n > 350) {
+      setWeightMsg('Ingresa un peso válido entre 25 y 350 kg.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      setWeightMsg('Elige una fecha válida.');
+      return;
+    }
+    setWeights(prev => [...prev.filter(x => x.date !== dateInput), {date: dateInput, kg: n}]);
+    setWeightInput('');
+    setWeightMsg('¡Medición guardada!');
+    setTimeout(() => setWeightMsg(''), 2500);
+  }
+
+  function readSection() {
+    if (speech.speaking && speech.label === 'Sección') return stopSpeech();
+    const el = document.querySelector('.content');
+    const clone = el?.cloneNode(true) as HTMLElement | undefined;
+    clone?.querySelectorAll('button,input,select,svg,a,.fine,.skeleton,label').forEach(x => x.remove());
+    clone?.querySelectorAll('h1,h2,h3,p,li,div').forEach(x => x.append('. '));
+    speak(clone?.textContent || '', 'Sección');
+  }
+
+  const reflection = reflections[reflectionIndex];
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-icon">
+            <Heart size={20} fill="currentColor" />
+          </div>
+          <div>
+            <b>
+              vida<span>activa</span>
+            </b>
+            <small>Tu bienestar, a tu ritmo</small>
+          </div>
+        </div>
+        <nav aria-label="Secciones">
+          {menu.map(({id, name, icon: Icon}) => (
+            <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}>
+              <Icon size={19} />
+              {name}
+            </button>
+          ))}
+        </nav>
+        <div className="side-card">
+          <div className="eyebrow">Hoy te toca</div>
+          <strong>{today.label}</strong>
+          <p>
+            {today.duration} · {today.details}
+          </p>
+          <button className="link-btn" onClick={() => setTab('plan')}>
+            Ver plan <ArrowUpRight size={14} />
+          </button>
+        </div>
+        <button className="side-out" onClick={onSignOut}>
+          <LogOut size={16} /> Cerrar sesión
+        </button>
+      </aside>
+
+      <main>
+        <header className="topbar">
+          <div className="topbar-brand">
+            <div className="brand-icon sm">
+              <Heart size={16} fill="currentColor" />
+            </div>
+            <b>
+              vida<span>activa</span>
+            </b>
+          </div>
+          <div className="hello">
+            <span className={'dot' + (syncStatus === 'Sincronizado' ? '' : ' warn')} title={syncStatus} />
+            {greeting()}, <b>{profile.name}</b>
+          </div>
+          <div className="top-actions">
+            <button className={'btn btn-soft sm' + (speech.speaking && speech.label === 'Sección' ? ' is-playing' : '')} onClick={readSection} disabled={!speech.supported && !speech.aiAvailable}>
+              {speech.speaking && speech.label === 'Sección' ? <Square size={15} /> : <Volume2 size={16} />}
+              <span className="hide-sm">{speech.speaking && speech.label === 'Sección' ? 'Detener' : 'Escuchar sección'}</span>
+            </button>
+            <button className="icon-btn" onClick={() => setShowVoice(v => !v)} aria-label="Ajustes de voz" title="Ajustes de voz">
+              <Settings2 size={18} />
+            </button>
+            <div className="avatar" title={profile.name}>
+              {profile.initial}
+            </div>
+            <button className="icon-btn show-sm" onClick={onSignOut} aria-label="Cerrar sesión">
+              <LogOut size={17} />
+            </button>
+          </div>
+          {showVoice && (
+            <div className="vs-pop top">
+              <VoiceSettings onClose={() => setShowVoice(false)} />
+            </div>
+          )}
+        </header>
+
+        <div className="content">
+          {!ready && (
+            <div className="alert">
+              <Info size={16} /> {syncStatus}
+            </div>
+          )}
+
+          {tab === 'overview' && (
+            <>
+              <section className="hero">
+                <div>
+                  <div className="eyebrow light">Resumen personal</div>
+                  <h1>
+                    Tu progreso, <em>paso a paso.</em>
+                  </h1>
+                  <p>Más que un número: hábitos pequeños para sentirte mejor cada día.</p>
+                  <div className="hero-actions">
+                    <button className="btn btn-white" onClick={() => setTab('recipes')}>
+                      <Utensils size={17} /> Buscar recetas
+                    </button>
+                    <button className="btn btn-outline-light" onClick={() => setTab('exercises')}>
+                      <Dumbbell size={17} /> Ejercicios
+                    </button>
+                  </div>
+                </div>
+                <div className="hero-today">
+                  <small>Hoy · {today.day}</small>
+                  <strong>{today.label}</strong>
+                  <span>{today.duration}</span>
+                  <button className={'done-btn light' + (checked.includes(today.day) ? ' on' : '')} onClick={() => toggleIn(setChecked)(today.day)}>
+                    <Check size={15} /> {checked.includes(today.day) ? 'Hecho hoy' : 'Marcar como hecho'}
+                  </button>
+                </div>
+              </section>
+
+              <div className="stats">
+                <div className="stat">
+                  <span>Peso actual</span>
+                  <strong>
+                    {current === undefined ? '—' : formatKg(current)} <small>kg</small>
+                  </strong>
+                  <p>Última medición</p>
+                </div>
+                <div className="stat">
+                  <span>Cambio acumulado</span>
+                  <strong className={delta !== undefined && delta > 0 ? 'good' : ''}>
+                    {delta === undefined ? '—' : `${delta > 0 ? '−' : delta < 0 ? '+' : ''}${formatKg(Math.abs(delta))}`} <small>kg</small>
+                  </strong>
+                  <p>Desde tu primer registro</p>
+                </div>
+                <div className="stat">
+                  <span>Semana activa</span>
+                  <strong>
+                    {checked.length}
+                    <small> / 7 días</small>
+                  </strong>
+                  <div className="bar">
+                    <b style={{width: `${(checked.length / 7) * 100}%`}} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="two">
+                <section className="panel">
+                  <div className="panel-head">
+                    <div>
+                      <div className="eyebrow">Seguimiento</div>
+                      <h2>Evolución de peso</h2>
+                    </div>
+                    <Scale size={20} className="muted" />
+                  </div>
+                  <WeightChart data={sorted} />
+                  <p className="fine">La balanza fluctúa día a día: compara promedios semanales y observa también tu energía y tu fuerza.</p>
+                </section>
+                <section className="panel">
+                  <div className="panel-head">
+                    <div>
+                      <div className="eyebrow">Nueva medición</div>
+                      <h2>Registra tu peso</h2>
+                    </div>
+                    <Plus size={20} className="muted" />
+                  </div>
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault();
+                      addWeight();
+                    }}
+                  >
+                    <label className="field">
+                      <span>Fecha</span>
+                      <input type="date" value={dateInput} onChange={e => setDateInput(e.target.value)} />
+                    </label>
+                    <label className="field">
+                      <span>Peso (kg)</span>
+                      <input inputMode="decimal" placeholder="Ej. 72,5" value={weightInput} onChange={e => setWeightInput(e.target.value)} />
+                    </label>
+                    <button className="btn btn-primary full" disabled={!ready} type="submit">
+                      Guardar medición <ArrowUpRight size={16} />
+                    </button>
+                  </form>
+                  {weightMsg && (
+                    <p className="form-msg" role="status">
+                      {weightMsg}
+                    </p>
+                  )}
+                  <p className="fine">🔒 Tus datos quedan en tu cuenta privada y se sincronizan entre tus dispositivos.</p>
+                </section>
+              </div>
+            </>
+          )}
+
+          {tab === 'recipes' && <RecipesView favorites={favorites} onToggleFavorite={toggleIn(setFavorites)} />}
+          {tab === 'exercises' && <ExercisesView done={exerciseDone} onToggleDone={toggleIn(setExerciseDone)} />}
+
+          {tab === 'plan' && (
+            <>
+              <header className="page-head">
+                <div className="eyebrow">Movimiento semanal</div>
+                <h1>
+                  Una semana <em>a tu manera.</em>
+                </h1>
+                <p className="lead">Un punto de partida de baja intensidad, ajustable a tu condición y a tu tiempo.</p>
+              </header>
+              <div className="week-progress">
+                <div className="bar big">
+                  <b style={{width: `${(checked.length / 7) * 100}%`}} />
+                </div>
+                <span>
+                  {checked.length} de 7 días completados
+                </span>
+                {checked.length > 0 && (
+                  <button className="link-btn" onClick={() => setChecked([])}>
+                    Empezar semana nueva
+                  </button>
+                )}
+              </div>
+              <div className="schedule">
+                {weeklyPlan.map((d, i) => {
+                  const isDone = checked.includes(d.day);
+                  return (
+                    <div className={'day' + (isDone ? ' done' : '') + (i === todayIndex ? ' today' : '')} key={d.day}>
+                      <div className="day-n">{d.day.slice(0, 3)}</div>
+                      <div className="day-info">
+                        <span>
+                          {i === todayIndex ? 'Hoy · ' : ''}
+                          {d.duration}
+                        </span>
+                        <h3>{d.label}</h3>
+                        <p>{d.details}</p>
+                      </div>
+                      <ListenButton className="icon-btn" text={`${d.day}. ${d.label}. Duración: ${d.duration}. ${d.details}`} label={'Plan: ' + d.day} />
+                      <button onClick={() => toggleIn(setChecked)(d.day)} aria-label={(isDone ? 'Desmarcar ' : 'Marcar ') + d.day} className="check">
+                        {isDone && <Check size={18} />}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="alert">
+                <Info size={16} /> Rutina orientativa, no personalizada clínicamente. Ajusta según cómo te sientas y lo que indique tu equipo de salud.
+              </div>
+            </>
+          )}
+
+          {tab === 'motivation' && (
+            <>
+              <header className="page-head">
+                <div className="eyebrow">Un espacio para volver a empezar</div>
+                <h1>
+                  Tu bienestar también <em>se escucha.</em>
+                </h1>
+                <p className="lead">Reflexiones breves narradas con voz cálida y pausada, más podcasts en español sobre hábitos y bienestar.</p>
+              </header>
+              <section className="quote-card">
+                <div className="quote-top">
+                  <span className="pill light">{reflection.theme}</span>
+                  <span className="muted-light">
+                    {reflectionIndex + 1} / {reflections.length}
+                  </span>
+                </div>
+                <p className="quote">“{reflection.message}”</p>
+                <p className="quote-note">Reflexión original inspirada en ideas de {reflection.author}. No es una cita textual.</p>
+                <div className="hero-actions">
+                  <ListenButton text={reflection.message} label="Reflexión" className="btn btn-white">
+                    Escuchar reflexión
+                  </ListenButton>
+                  <button
+                    className="btn btn-outline-light"
+                    onClick={() => {
+                      stopSpeech();
+                      setReflectionIndex(i => (i + 1) % reflections.length);
+                    }}
+                  >
+                    <Shuffle size={17} /> Otra reflexión
+                  </button>
+                </div>
+              </section>
+              <div className="panel voice-panel">
+                <VoiceSettings />
+              </div>
+              <div className="section-head">
+                <div>
+                  <div className="eyebrow">Podcasts en español</div>
+                  <h2>Escucha y aprende a tu ritmo</h2>
+                </div>
+              </div>
+              <div className="grid">
+                {podcasts.map(p => (
+                  <article className="card podcast" key={p.title}>
+                    <div className="card-body">
+                      <div className="pod-icon">
+                        <Headphones size={22} />
+                      </div>
+                      <span className="pill">{p.tag}</span>
+                      <h3>{p.title}</h3>
+                      <p className="meta">{p.topic}</p>
+                      <p className="desc">{p.desc}</p>
+                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="link-btn">
+                        Escuchar en la plataforma <ExternalLink size={14} />
+                      </a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <p className="fine">Los podcasts pertenecen a sus creadores; abrimos sus sitios oficiales. Estas reflexiones son apoyo para hábitos saludables, no un tratamiento psicológico.</p>
+            </>
+          )}
+        </div>
+      </main>
+
+      <nav className="bottom-nav" aria-label="Secciones">
+        {menu.map(({id, short, icon: Icon}) => (
+          <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}>
+            <Icon size={21} />
+            <span>{short}</span>
+          </button>
+        ))}
+      </nav>
+      <AudioBar />
+    </div>
+  );
+}
+
+export default function Page() {
+  const supabase = getSupabase();
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!supabase) {
+      setLoadingAuth(false);
+      return;
+    }
+    let active = true;
+    supabase.auth
+      .getUser()
+      .then(({data}) => {
+        if (active) {
+          setUser(data.user);
+          setLoadingAuth(false);
+        }
+      })
+      .catch(() => active && setLoadingAuth(false));
+    const {
+      data: {subscription},
+    } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (active) {
+        setUser(session?.user || null);
+        setLoadingAuth(false);
+      }
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  async function submitAuth(e: React.FormEvent) {
+    e.preventDefault();
+    if (!supabase) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      if (mode === 'signup') {
+        if (name.trim().length < 2) {
+          setMessage('Escribe un nombre de al menos dos caracteres.');
+          return;
+        }
+        const {error} = await supabase.auth.signUp({email: email.trim(), password, options: {data: {display_name: name.trim().slice(0, 40)}}});
+        if (error) throw error;
+        setMessage('Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
+      } else {
+        const {error} = await supabase.auth.signInWithPassword({email: email.trim(), password});
+        if (error) throw error;
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'No se pudo completar la solicitud.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!supabase)
+    return (
+      <div className="auth">
+        <div className="auth-card">
+          <h1>
+            Vida Activa <em>Familia</em>
+          </h1>
+          <div className="alert">
+            <Info size={18} /> Para habilitar cuentas privadas, configura NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel. Consulta FAMILY_AUTH_SETUP.md.
+          </div>
+        </div>
+      </div>
+    );
+  if (loadingAuth)
+    return (
+      <div className="auth">
+        <div className="loader-heart">
+          <Heart size={34} fill="currentColor" />
+        </div>
+      </div>
+    );
+  if (user) {
+    const display = String(user.user_metadata?.display_name || user.email?.split('@')[0] || 'Hola');
+    return <Dashboard key={user.id} user={user} profile={{id: user.id, name: display, initial: display.charAt(0).toUpperCase()}} onSignOut={() => supabase.auth.signOut()} />;
+  }
+  return (
+    <div className="auth">
+      <div className="auth-art" aria-hidden>
+        <div className="brand-icon lg">
+          <Heart size={30} fill="currentColor" />
+        </div>
+        <h2>Come rico, muévete a tu ritmo y escucha lo que te hace bien.</h2>
+        <ul>
+          <li>
+            <Utensils size={18} /> Recetas de todo el mundo, en español
+          </li>
+          <li>
+            <Dumbbell size={18} /> Cientos de ejercicios guiados
+          </li>
+          <li>
+            <Headphones size={18} /> Instrucciones y reflexiones por voz
+          </li>
+        </ul>
+      </div>
+      <div className="auth-card">
+        <div className="eyebrow">Vida Activa AI · Familia</div>
+        <h1>
+          Tu bienestar, <em>tu cuenta.</em>
+        </h1>
+        <p className="lead">Cada integrante usa su propia cuenta y conserva sus registros privados en todos sus dispositivos.</p>
+        <div className="tabs" role="tablist">
+          <button role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'on' : ''} onClick={() => (setMode('login'), setMessage(''))}>
+            Iniciar sesión
+          </button>
+          <button role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'on' : ''} onClick={() => (setMode('signup'), setMessage(''))}>
+            Crear cuenta
+          </button>
+        </div>
+        <form onSubmit={submitAuth}>
+          {mode === 'signup' && (
+            <label className="field">
+              <span>Nombre o apodo</span>
+              <input required minLength={2} maxLength={40} value={name} onChange={e => setName(e.target.value)} />
+            </label>
+          )}
+          <label className="field">
+            <span>Correo electrónico</span>
+            <input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>Contraseña</span>
+            <input type="password" required minLength={8} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} />
+          </label>
+          <button className="btn btn-primary full" disabled={busy} type="submit">
+            {busy ? 'Procesando…' : mode === 'login' ? 'Entrar a mi cuenta' : 'Registrarme'}
+          </button>
+        </form>
+        {message && (
+          <p role="status" className="form-msg">
+            {message}
+          </p>
+        )}
+        <p className="fine">Los datos de cada cuenta se aíslan con reglas de acceso en la base de datos. No compartas tu contraseña.</p>
+      </div>
+    </div>
+  );
 }

@@ -11,12 +11,17 @@ npm run dev
 
 Abre http://localhost:3000. Para producción, `npm run build && npm start`, o importa el repositorio en Vercel.
 
-## Fuentes externas
+## Fuentes externas (todo en español)
 
-- **TheMealDB**: `/api/recipes?q=chicken` obtiene resultados, imágenes, ingredientes, instrucciones y enlaces reales a YouTube cuando la fuente los publica. Usa API pública de demostración; verifica licencias/condiciones antes de monetizar.
-- **wger**: `/api/exercises` obtiene la colección pública con traducciones y medios según disponibilidad. Si no responde, se muestran 3 ejercicios locales explícitamente identificados como respaldo.
+- **Recetas — TheMealDB + traducción automática**: `/api/recipes?q=salmón` acepta búsquedas en español (diccionario de ingredientes y categorías + traducción de palabras desconocidas), consulta la web y devuelve títulos traducidos. `/api/recipes/{id}` entrega la receta completa traducida (ingredientes con medidas, pasos numerados, foto, video de YouTube y fuente). `/api/recipes/random` da una receta sorpresa. Se suman las recetas originales de Vida Activa.
+  - Traducción: OpenAI (`OPENAI_API_KEY`) si está configurada; si no, MyMemory (gratuito). Cada fragmento se guarda en la caché de Vercel 30 días, así cada receta se traduce una sola vez. `MYMEMORY_EMAIL` amplía la cuota gratuita.
+- **Ejercicios — wger.de en español**: `/api/exercises?q=&category=&bodyweight=1&page=` usa las ~650 traducciones oficiales al español de la comunidad wger, con imagen, video, categoría y equipamiento en español, búsqueda, filtros y paginación (caché 24 h). Licencia CC-BY-SA.
 
-No se realiza scraping de sitios arbitrarios. Las URL externas se conservan como enlaces y los medios de terceros se cargan desde origen. Nunca se inventan calorías, videos, ni métricas.
+## Voz natural
+
+- Motor propio (`lib/speech.ts`): elige la voz en español más natural del dispositivo (voces “Natural/Online” de Edge, “Mejoradas/Premium” de Apple, Google español) y descarta voces robóticas; velocidad pausada por defecto (0,85) y ajustable; lee frase por frase con pausas naturales; normaliza medidas (“1/2 taza” → “media taza”, “2×8” → “2 series de 8”, “25–30 min” → “25 a 30 minutos”).
+- Barra de audio flotante con pausa/continuar, progreso y ajustes de voz (se guardan en el dispositivo).
+- **Voz IA opcional**: con `OPENAI_API_KEY` en Vercel se activa `/api/tts` (gpt-4o-mini-tts, voz cálida y pausada en español). Solo para usuarios con sesión iniciada y con límite por minuto. Si falla, se usa la voz del dispositivo.
 
 ## Datos y seguridad
 
@@ -39,8 +44,8 @@ No se realiza scraping de sitios arbitrarios. Las URL externas se conservan como
 1. Subir el contenido de esta carpeta (con `package.json` en la raíz del repositorio) a GitHub.
 2. En https://vercel.com/new importar el repositorio.
 3. Framework: `Next.js`, Root Directory: `./`, Build Command: `npm run build`.
-4. No se requieren variables de entorno para la versión inicial.
-5. Revisar `/api/recipes?q=chicken` y `/api/exercises` en la URL publicada. Las fuentes externas pueden estar temporalmente inaccesibles.
+4. Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`; opcionales `OPENAI_API_KEY` (voz IA y mejor traducción) y `MYMEMORY_EMAIL`.
+5. Revisar `/api/recipes?q=pollo` y `/api/exercises` en la URL publicada. Las fuentes externas pueden estar temporalmente inaccesibles.
 6. Antes de agregar usuarios, peso u otra información personal en servidor, implementar cuentas, privacidad y medidas de seguridad.
 
 En Netlify también puede importarse el mismo repositorio con el soporte oficial de Next.js. No usar despliegue estático (`output: export`) porque se necesitan rutas de API.

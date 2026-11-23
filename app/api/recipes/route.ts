@@ -1,16 +1,99 @@
-import {NextRequest,NextResponse} from 'next/server';
-type Recipe={id:string;title:string;category:string;origin:string;image:string;source:string;video:string;instructions:string;ingredients:{name:string;amount:string}[];keywords:string};
-const recipes:Recipe[]=[
-{id:'va-1',title:'Pollo al horno con verduras',category:'Plato principal',origin:'Cocina casera',image:'',source:'',video:'',keywords:'pollo chicken horno verduras almuerzo',ingredients:[{name:'pechuga de pollo',amount:'150 g'},{name:'zanahoria',amount:'1'},{name:'zapallo italiano',amount:'1/2'},{name:'aceite de oliva',amount:'1 cucharadita'},{name:'orégano y pimienta',amount:'a gusto'}],instructions:'Precalienta el horno a 190 grados. Lava y corta las verduras. Coloca el pollo y las verduras en una fuente. Agrega el aceite y los condimentos. Hornea entre 25 y 35 minutos, hasta que el pollo alcance 74 grados en su centro. Sirve caliente.'},
-{id:'va-2',title:'Ensalada de garbanzos y atún',category:'Ensalada',origin:'Cocina casera',image:'',source:'',video:'',keywords:'ensalada garbanzos atun pescado legumbres lunch',ingredients:[{name:'garbanzos cocidos y escurridos',amount:'3/4 taza'},{name:'atún al agua escurrido',amount:'1/2 lata'},{name:'tomate',amount:'1'},{name:'pepino',amount:'1/2'},{name:'limón',amount:'1/2'},{name:'aceite de oliva',amount:'1 cucharadita'}],instructions:'Lava y corta el tomate y el pepino. Mezcla los garbanzos cocidos con el atún y las verduras. Aliña con jugo de limón y aceite de oliva. Revuelve y sirve fresco.'},
-{id:'va-3',title:'Avena con yogur y manzana',category:'Desayuno',origin:'Cocina casera',image:'',source:'',video:'',keywords:'avena desayuno yogur manzana breakfast',ingredients:[{name:'avena',amount:'1/2 taza'},{name:'yogur natural sin azúcar',amount:'1 unidad'},{name:'manzana',amount:'1/2'},{name:'canela',amount:'a gusto'}],instructions:'Lava y corta la manzana en cubos. Mezcla la avena con el yogur. Agrega la manzana y espolvorea canela. Deja reposar cinco minutos antes de comer.'},
-{id:'va-4',title:'Pescado al limón con arroz integral',category:'Plato principal',origin:'Cocina casera',image:'',source:'',video:'',keywords:'pescado fish salmon merluza arroz almuerzo',ingredients:[{name:'filete de pescado',amount:'150 g'},{name:'arroz integral cocido',amount:'1/2 taza'},{name:'limón',amount:'1/2'},{name:'brócoli',amount:'1 taza'},{name:'aceite de oliva',amount:'1 cucharadita'}],instructions:'Cocina el arroz integral siguiendo las indicaciones del envase. Cocina el brócoli al vapor hasta que esté tierno. Condimenta el pescado con limón y cocínalo en sartén con aceite hasta que esté completamente cocido y se desmenuce fácilmente. Sirve junto al arroz y brócoli.'},
-{id:'va-5',title:'Sopa de lentejas con verduras',category:'Sopa',origin:'Cocina casera',image:'',source:'',video:'',keywords:'sopa lentejas verduras legumbres soup',ingredients:[{name:'lentejas cocidas',amount:'1 taza'},{name:'zanahoria',amount:'1/2'},{name:'cebolla',amount:'1/4'},{name:'agua o caldo bajo en sodio',amount:'1 taza'},{name:'comino',amount:'a gusto'}],instructions:'Pica la zanahoria y la cebolla. Cocínalas en una olla con un poco de agua durante cinco minutos. Incorpora las lentejas cocidas, el caldo y el comino. Hierve suavemente entre diez y quince minutos. Sirve tibio.'},
-{id:'va-6',title:'Tortilla de espinaca y tomate',category:'Cena',origin:'Cocina casera',image:'',source:'',video:'',keywords:'tortilla huevos espinaca tomate cena omelette',ingredients:[{name:'huevos',amount:'2'},{name:'espinaca lavada',amount:'1 taza'},{name:'tomate',amount:'1/2'},{name:'aceite de oliva',amount:'1 cucharadita'}],instructions:'Lava y corta la espinaca y el tomate. Bate los huevos en un recipiente. Calienta una sartén antiadherente con aceite. Agrega las verduras y los huevos. Cocina a fuego medio y voltea con cuidado hasta que el huevo esté completamente cuajado.'}
-];
-export async function GET(req:NextRequest){
- const q=(req.nextUrl.searchParams.get('q')||'').trim().toLocaleLowerCase('es-CL').slice(0,60);
- const terms=q.split(/\\s+/).filter(Boolean);
- const items=recipes.filter(r=>!terms.length||terms.some(t=>(r.title+' '+r.category+' '+r.keywords).toLocaleLowerCase('es-CL').includes(t))).map(({keywords,...r})=>r);
- return NextResponse.json({items,source:'Vida Activa AI - recetas originales en español',nutrition:'not_available'});
+import {NextRequest, NextResponse} from 'next/server';
+import {localRecipes} from '../../../lib/local-recipes';
+import type {RecipeSummary} from '../../../lib/recipe-types';
+import {translateLines, translateText} from '../../../lib/translate';
+import {AREA_ES, CATEGORY_ES, QUERY_CATEGORY, QUERY_TERM, normalizeQuery, stripAccents} from '../../../lib/food-dictionary';
+
+const API = 'https://www.themealdb.com/api/json/v1/1/';
+const DAY = 86400;
+const STOP = new Set(['de', 'del', 'con', 'al', 'a', 'la', 'el', 'las', 'los', 'y', 'en', 'para', 'sin', 'un', 'una', 'receta', 'recetas', 'rica', 'rico', 'facil', 'sana', 'sano', 'saludable', 'saludables']);
+const CAT = Object.fromEntries(Object.entries(QUERY_CATEGORY).map(([k, v]) => [stripAccents(k), v]));
+const TERM = Object.fromEntries(Object.entries(QUERY_TERM).map(([k, v]) => [stripAccents(k), v]));
+
+type Meal = {idMeal: string; strMeal: string; strMealThumb?: string; strCategory?: string; strArea?: string};
+
+async function get(path: string): Promise<Meal[]> {
+  try {
+    const r = await fetch(API + path, {next: {revalidate: DAY}, signal: AbortSignal.timeout(8000)});
+    if (!r.ok) return [];
+    const d = await r.json();
+    return Array.isArray(d?.meals) ? d.meals : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const raw = (req.nextUrl.searchParams.get('q') || '').slice(0, 60);
+  const q = normalizeQuery(raw) || 'pollo';
+  const words = q.split(' ').filter(w => w && !STOP.has(w));
+
+  const categories = new Set<string>();
+  const terms = new Set<string>();
+  const unknown: string[] = [];
+  for (const w of words) {
+    if (CAT[w]) categories.add(CAT[w]);
+    if (TERM[w]) terms.add(TERM[w]);
+    if (!CAT[w] && !TERM[w] && w.length > 2) unknown.push(w);
+  }
+  if (unknown.length) {
+    const {text} = await translateText(unknown.join(' '), 'es', 'en');
+    text
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !['the', 'and', 'with', 'recipe'].includes(w))
+      .forEach(w => terms.add(w));
+  }
+
+  const jobs: Promise<{meals: Meal[]; weight: number; cat?: string}>[] = [];
+  for (const c of categories) jobs.push(get('filter.php?c=' + encodeURIComponent(c)).then(meals => ({meals, weight: 1, cat: c})));
+  for (const t of terms) {
+    jobs.push(get('search.php?s=' + encodeURIComponent(t)).then(meals => ({meals, weight: 2})));
+    jobs.push(get('filter.php?i=' + encodeURIComponent(t.replace(/\s+/g, '_'))).then(meals => ({meals, weight: 1.5})));
+  }
+  const results = await Promise.all(jobs);
+  const sourceDown = jobs.length > 0 && results.every(r => r.meals.length === 0);
+
+  const score = new Map<string, {meal: Meal; s: number; cat?: string}>();
+  for (const {meals, weight, cat} of results) {
+    for (const m of meals) {
+      const prev = score.get(m.idMeal);
+      const titleHits = [...terms].filter(t => m.strMeal.toLowerCase().includes(t)).length;
+      const s = weight + titleHits;
+      if (prev) {
+        prev.s += s;
+        prev.cat ||= cat;
+        prev.meal = {...prev.meal, ...m};
+      } else score.set(m.idMeal, {meal: m, s, cat});
+    }
+  }
+  const top = [...score.values()].sort((a, b) => b.s - a.s).slice(0, 24);
+
+  const {lines: titles, ok} = await translateLines(top.map(t => t.meal.strMeal));
+  const web: RecipeSummary[] = top.map((t, i) => {
+    const cat = t.meal.strCategory || t.cat || '';
+    return {
+      id: t.meal.idMeal,
+      title: titles[i],
+      image: t.meal.strMealThumb ? t.meal.strMealThumb + '/medium' : '',
+      category: CATEGORY_ES[cat] || 'Receta',
+      origin: t.meal.strArea ? AREA_ES[t.meal.strArea] || t.meal.strArea : '',
+      provider: 'themealdb',
+    };
+  });
+
+  const local = localRecipes
+    .filter(r => words.some(w => normalizeQuery(r.title + ' ' + r.category + ' ' + r.keywords).includes(w)))
+    .map(({id, title, image, category, origin, provider}) => ({id, title, image, category, origin, provider}));
+
+  return NextResponse.json(
+    {
+      items: [...local, ...web],
+      translated: ok,
+      error: sourceDown && !local.length ? 'La fuente web de recetas no respondió. Intenta nuevamente en unos minutos.' : undefined,
+      source: 'TheMealDB (traducido al español) + recetas originales de Vida Activa AI',
+    },
+    {headers: {'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'}},
+  );
 }

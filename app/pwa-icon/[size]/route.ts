@@ -12,7 +12,7 @@ export async function GET(_request: Request, context: { params: Promise<{ size: 
   const square = React.createElement('div', {
     style: {
       display: 'flex', width: '100%', height: '100%',
-      background: '#438f74', alignItems: 'center', justifyContent: 'center'
+      background: '#2f8a67', alignItems: 'center', justifyContent: 'center'
     }
   }, React.createElement('div', {
     style: {
