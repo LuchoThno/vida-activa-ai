@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   results.forEach((r, k) => {
     if (r.status !== 'fulfilled') return;
     images[SHOWS[k].id] = r.value.image;
-    all = all.concat(r.value.episodes.filter(e => new Date(e.date).getTime() >= since).slice(0, 6));
+    all = all.concat(r.value.episodes.filter(e => new Date(e.date).getTime() >= since).slice(0, 8));
   });
   all.sort((a, b) => b.date.localeCompare(a.date));
   return NextResponse.json({updatedAt: new Date().toISOString(), images, episodes: all.slice(0, 60), failed: results.filter(r => r.status === 'rejected').length}, {headers});
