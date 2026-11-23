@@ -12,13 +12,20 @@ const TERM = Object.fromEntries(Object.entries(QUERY_TERM).map(([k, v]) => [stri
 
 type Meal = {idMeal: string; strMeal: string; strMealThumb?: string; strCategory?: string; strArea?: string};
 
+const diag: string[] = [];
 async function get(path: string): Promise<Meal[]> {
   try {
-    const r = await fetch(API + path, {next: {revalidate: DAY}, signal: AbortSignal.timeout(8000)});
-    if (!r.ok) return [];
+    const r = await fetch(API + path, {next: {revalidate: DAY}, signal: AbortSignal.timeout(8000), headers: {Accept: 'application/json', 'User-Agent': 'VidaActivaAI/1.0 (+https://vercel.app)'}});
+    if (!r.ok) {
+      diag.push(path + ' → HTTP ' + r.status);
+      console.warn('[recipes] TheMealDB', path, r.status);
+      return [];
+    }
     const d = await r.json();
     return Array.isArray(d?.meals) ? d.meals : [];
-  } catch {
+  } catch (e) {
+    diag.push(path + ' → ' + (e instanceof Error ? e.message : 'error'));
+    console.warn('[recipes] TheMealDB error', path, e);
     return [];
   }
 }
@@ -93,6 +100,7 @@ export async function GET(req: NextRequest) {
       translated: ok,
       error: sourceDown && !local.length ? 'La fuente web de recetas no respondió. Intenta nuevamente en unos minutos.' : undefined,
       source: 'TheMealDB (traducido al español) + recetas originales de Vida Activa AI',
+      ...(req.nextUrl.searchParams.get('debug') === '1' ? {diag: diag.splice(0)} : {}),
     },
     {headers: {'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'}},
   );

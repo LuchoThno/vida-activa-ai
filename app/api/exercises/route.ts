@@ -86,7 +86,7 @@ async function loadAll(): Promise<WgerExercise[]> {
       video: vidBy.get(t.exercise) || '',
       category: CATEGORY_ES[e?.category] || 'General',
       equipment: eq.map(id => EQUIPMENT_ES[id]).filter(Boolean).join(', ') || 'Sin material',
-      bodyweight: !eq.length || eq.includes(7) || eq.every(id => id === 4 || id === 7),
+      bodyweight: (!eq.length || eq.every(id => id === 4 || id === 7 || id === 11 || id === 5)) && !/m[aá]quina|polea|barra|mancuerna|kettlebell|pesa rusa|banco|smith|prensa|press de banca/i.test(name),
       source: `https://wger.de/es/exercise/${t.exercise}/view/`,
     };
     const key = normalizeQuery(item.title);
