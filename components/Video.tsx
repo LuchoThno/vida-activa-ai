@@ -2,6 +2,7 @@
 import {useEffect, useState, useSyncExternalStore} from 'react';
 import {ExternalLink, Loader2, Play, Video as VideoIcon, X} from 'lucide-react';
 import {stopSpeech} from '../lib/speech';
+import {pauseAudio} from '../lib/player';
 import {videoById, youtubeThumb, youtubeWatchUrl, type VideoInfo} from '../lib/videos';
 
 /**
@@ -14,6 +15,7 @@ let current: VideoRequest | null = null;
 const listeners = new Set<() => void>();
 export function openVideo(v: VideoRequest) {
   stopSpeech();
+  pauseAudio();
   current = v;
   listeners.forEach(l => l());
 }

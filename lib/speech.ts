@@ -13,6 +13,7 @@
  * - Si el servidor tiene configurada una voz IA (OPENAI_API_KEY), puede usarla
  *   para una narración todavía más natural, con respaldo automático a la voz del dispositivo.
  */
+import {pauseAudio} from './player';
 import {useSyncExternalStore} from 'react';
 
 export type SpeechEngine = 'auto' | 'browser' | 'ai';
@@ -334,6 +335,7 @@ async function speakAI(groups: string[], gen: number): Promise<boolean> {
 export async function speak(text: string, label = 'Lectura') {
   init();
   stopSpeech();
+  pauseAudio(); // pausa el podcast o la radio mientras se lee en voz alta
   const chunks = splitIntoChunks(text.slice(0, 15000));
   if (!chunks.length) return;
   const gen = ++generation;
