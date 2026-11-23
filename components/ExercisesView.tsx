@@ -1,9 +1,10 @@
 'use client';
 import {useEffect, useRef, useState} from 'react';
 import {ArrowUpRight, Check, ChevronDown, Dumbbell, Info, Search, Timer} from 'lucide-react';
-import {guidedExercises} from '../lib/exercises';
+import {guidedExercises, guidedRoutines} from '../lib/exercises';
+import {videoFor} from '../lib/videos';
 import {ListenButton} from './Audio';
-import {VideoButton} from './Video';
+import {VideoButton, VideoCard} from './Video';
 
 type WebExercise = {id: string; title: string; description: string; steps: string[]; image: string; video: string; category: string; equipment: string; source: string};
 const safeLink = (url: string) => (/^https:\/\//i.test(url) ? url : '#');
@@ -11,6 +12,7 @@ const safeLink = (url: string) => (/^https:\/\//i.test(url) ? url : '#');
 export default function ExercisesView({done, onToggleDone}: {done: string[]; onToggleDone: (id: string) => void}) {
   const [filter, setFilter] = useState('Todos');
   const [openGuide, setOpenGuide] = useState<string | null>(null);
+  const [rFilter, setRFilter] = useState('Todas');
 
   const [items, setItems] = useState<WebExercise[]>([]);
   const [cats, setCats] = useState<string[]>(['Todos']);
@@ -85,6 +87,28 @@ export default function ExercisesView({done, onToggleDone}: {done: string[]; onT
           <p>Debes poder conversar mientras lo haces</p>
         </div>
       </div>
+
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow">Sigue el video en tiempo real</div>
+            <h2>Rutinas guiadas</h2>
+          </div>
+          <div className="chips compact">
+            {['Todas', ...guidedRoutines.map(r => r.group)].map(c => (
+              <button key={c} className={'chip' + (rFilter === c ? ' on' : '')} onClick={() => setRFilter(c)}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="muted small">Videos en español seleccionados de fisioterapeutas y entrenadores. Se reproducen aquí mismo; usa “Ver en YouTube” si prefieres abrirlos afuera.</p>
+        <div className="vgrid">
+          {guidedRoutines
+            .filter(r => rFilter === 'Todas' || r.group === rFilter)
+            .flatMap(r => r.items.map(v => <VideoCard key={r.group + v.id} video={v} label={r.group} />))}
+        </div>
+      </section>
 
       <section className="section">
         <div className="section-head">
@@ -232,7 +256,17 @@ export default function ExercisesView({done, onToggleDone}: {done: string[]; onT
                     )}
                   </div>
                   <div className="card-actions">
-                    <VideoButton req={m.video ? {title: m.title, mp4: m.video} : {title: m.title, query: m.title + ' ejercicio técnica correcta'}}>Ver video</VideoButton>
+                    <VideoButton
+                      req={
+                        m.video
+                          ? {title: m.title, mp4: m.video, source: m.source}
+                          : videoFor(m.title, true)
+                            ? {title: m.title, youtube: videoFor(m.title, true)!.id}
+                            : {title: m.title, query: m.title + ' ejercicio técnica correcta'}
+                      }
+                    >
+                      Ver video
+                    </VideoButton>
                     <button className={'done-btn' + (isDone ? ' on' : '')} onClick={() => onToggleDone('wger-' + m.id)}>
                       <Check size={15} /> {isDone ? 'Hecho' : 'Marcar'}
                     </button>

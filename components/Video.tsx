@@ -1,10 +1,14 @@
 'use client';
 import {useEffect, useState, useSyncExternalStore} from 'react';
-import {ExternalLink, Loader2, Video as VideoIcon, X} from 'lucide-react';
+import {ExternalLink, Loader2, Play, Video as VideoIcon, X} from 'lucide-react';
 import {stopSpeech} from '../lib/speech';
+import {videoById, youtubeThumb, youtubeWatchUrl, type VideoInfo} from '../lib/videos';
 
-/** Reproductor de video dentro de la app (YouTube embebido o archivo MP4). */
-export type VideoRequest = {title: string; youtube?: string; mp4?: string; query?: string};
+/**
+ * Reproductor de video dentro de la app (YouTube embebido sin cookies o archivo MP4).
+ * El video se ve dentro de la app y siempre se ofrece el enlace original para abrirlo afuera.
+ */
+export type VideoRequest = {title: string; youtube?: string; mp4?: string; query?: string; channel?: string; source?: string};
 
 let current: VideoRequest | null = null;
 const listeners = new Set<() => void>();
@@ -43,6 +47,30 @@ export function VideoButton({req, className = 'link-btn', children}: {req: Video
   );
 }
 
+/** Miniatura clicable: reproduce dentro de la app y muestra el enlace a YouTube. */
+export function VideoCard({video, title, label}: {video: VideoInfo; title?: string; label?: string}) {
+  const t = title || video.title;
+  return (
+    <div className="vcard">
+      <button type="button" className="vcard-thumb" onClick={() => openVideo({title: t, youtube: video.id, channel: video.channel})} aria-label={'Reproducir: ' + t}>
+        <img src={youtubeThumb(video.id)} alt="" loading="lazy" />
+        <span className="vcard-play">
+          <Play size={20} fill="currentColor" />
+        </span>
+        {video.duration && <span className="vcard-dur">{video.duration}</span>}
+      </button>
+      <div className="vcard-body">
+        {label && <span className="eyebrow">{label}</span>}
+        <strong>{t}</strong>
+        <span className="muted small">{video.channel}</span>
+        <a className="fine vcard-ext" href={youtubeWatchUrl(video.id)} target="_blank" rel="noopener noreferrer">
+          Ver en YouTube <ExternalLink size={12} />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function VideoModal() {
   const v = useCurrent();
   const [id, setId] = useState<string | undefined>();
@@ -71,6 +99,7 @@ export function VideoModal() {
   }, [v]);
 
   if (!v) return null;
+  const channel = v.channel || videoById(id)?.channel;
   return (
     <div className="overlay video-overlay" onClick={closeVideo}>
       <div className="video-box" role="dialog" aria-modal="true" aria-label={'Video: ' + v.title} onClick={e => e.stopPropagation()}>
@@ -103,10 +132,13 @@ export function VideoModal() {
             </div>
           )}
         </div>
-        {id && (
-          <a className="fine video-ext" href={`https://www.youtube.com/watch?v=${id}`} target="_blank" rel="noopener noreferrer">
-            ¿No se reproduce? Ábrelo en YouTube <ExternalLink size={12} />
-          </a>
+        {(id || v.mp4) && (
+          <div className="video-foot">
+            <span className="video-credit">{channel ? 'Video de ' + channel : v.mp4 ? 'Video de wger.de (CC-BY-SA)' : 'Video de YouTube'}</span>
+            <a className="btn btn-white btn-sm" href={id ? youtubeWatchUrl(id) : v.source || v.mp4} target="_blank" rel="noopener noreferrer">
+              {id ? 'Abrir en YouTube' : 'Ver fuente original'} <ExternalLink size={14} />
+            </a>
+          </div>
         )}
       </div>
     </div>
