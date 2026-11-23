@@ -1,9 +1,11 @@
 'use client';
 import {useState} from 'react';
 import {Check, ChevronDown, Droplets, Flag, Footprints, Info, RefreshCw, Sparkles, Target, Trophy, Flame} from 'lucide-react';
-import {ACTIVITY, DAYS, GOALS, buildProgram, compliance, healthyRange, todayISO, validate, weekDates, type HabitLog, type Program, type ProgramInput, type SessionLog} from '../lib/program';
+import {ACTIVITY, DAYS, GOALS, buildProgram, guideFor, compliance, healthyRange, todayISO, validate, weekDates, type HabitLog, type Program, type ProgramInput, type SessionLog} from '../lib/program';
 import {ListenButton} from './Audio';
-import {VideoButton} from './Video';
+import {VideoButton, VideoCard} from './Video';
+import {videoById, videoFor, youtubeWatchUrl} from '../lib/videos';
+import {ExternalLink} from 'lucide-react';
 
 const fmt = (n: number, d = 0) => n.toLocaleString('es-CL', {maximumFractionDigits: d});
 const fmtDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', {day: 'numeric', month: 'long', year: 'numeric'});
@@ -396,15 +398,29 @@ export default function ProgramView({
                 </div>
                 {isOpen && (
                   <div className="day-detail">
+                    {(() => {
+                      const g = videoById(s.guide || guideFor(s.type, p.input));
+                      return g ? <VideoCard video={g} label={s.type === 'Descanso' ? 'Opcional · estiramiento guiado' : 'Sesión guiada · síguela en video'} /> : null;
+                    })()}
                     <ul>
-                      {s.items.map((it, j) => (
-                        <li key={j}>
-                          <span>
-                            <b>{it.name}</b> · {it.detail}
-                          </span>
-                          <VideoButton req={{title: it.name, youtube: it.video, query: it.name + ' ejercicio técnica'}}>Video</VideoButton>
-                        </li>
-                      ))}
+                      {s.items.map((it, j) => {
+                        const vid = it.video || videoFor(it.name)?.id;
+                        return (
+                          <li key={j}>
+                            <span>
+                              <b>{it.name}</b> · {it.detail}
+                            </span>
+                            {vid ? (
+                              <span className="item-actions">
+                                <VideoButton req={{title: it.name, youtube: vid}}>Técnica</VideoButton>
+                                <a href={youtubeWatchUrl(vid)} target="_blank" rel="noopener noreferrer" aria-label={'Abrir en YouTube: ' + it.name} title="Abrir en YouTube">
+                                  <ExternalLink size={14} />
+                                </a>
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ul>
                     <ListenButton text={`${s.day}. ${s.title}. ${s.items.map(i => i.name + ', ' + i.detail).join('. ')}`} label={'Sesión: ' + s.day}>
                       Escuchar sesión

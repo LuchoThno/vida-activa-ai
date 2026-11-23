@@ -25,8 +25,11 @@ Abre http://localhost:3000. Para producción, `npm run build && npm start`, o im
 
 ## Videos dentro de la app
 
-- Reproductor integrado (YouTube sin cookies o MP4 de wger). Las recetas usan el video de TheMealDB; las guías iniciales y el programa tienen videos en español seleccionados.
-- Opcional `YOUTUBE_API_KEY` (YouTube Data API v3, gratuita): busca y reproduce dentro de la app un video en español para cualquier ejercicio que no tenga uno propio.
+- **Catálogo curado** (`lib/videos.ts`): ~45 videos en español (fisioterapeutas, sociedades médicas y entrenadores), verificados como embebibles. 27 de técnica por ejercicio y 16 rutinas guiadas para seguir en tiempo real (caminata, cardio sin saltos, fuerza en casa o en silla, gimnasio, yoga, equilibrio, espalda, rodillas, calentamiento y estiramiento).
+- **Mi programa**: cada actividad trae su video de técnica y cada día una "sesión guiada" elegida según objetivo, nivel, lugar, edad y molestias. Las sesiones de fuerza suman calentamiento y estiramiento final. Los programas ya guardados reciben los videos automáticamente (`videoFor` por nombre).
+- **Ejercicios**: nueva sección "Rutinas guiadas" con miniaturas, 16 guías paso a paso con video, y la biblioteca wger usa el video curado cuando el ejercicio coincide.
+- **Reproductor**: YouTube sin cookies (`youtube-nocookie.com`) o MP4 de wger, siempre dentro de la app, con crédito del canal y botón "Abrir en YouTube" / "Ver fuente original".
+- Opcional `YOUTUBE_API_KEY` (YouTube Data API v3, gratuita): busca y reproduce dentro de la app un video en español para cualquier ejercicio sin video propio.
 
 ## Voz natural
 

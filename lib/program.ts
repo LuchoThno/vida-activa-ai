@@ -4,6 +4,8 @@
  * pérdida de peso gradual de ~0,25–0,5 kg por semana). Orientativo: no reemplaza a un profesional.
  */
 
+import {ROUTINES, videoFor} from './videos';
+
 export type Sex = 'F' | 'M';
 export type Goal = 'bajar' | 'mantener' | 'fuerza' | 'energia';
 export type ProgramInput = {
@@ -21,7 +23,14 @@ export type ProgramInput = {
   limits: string[]; // rodillas | espalda | hombros | corazon
 };
 export type SessionItem = {name: string; detail: string; video?: string};
-export type Session = {day: string; type: 'Fuerza' | 'Cardio' | 'Movilidad' | 'Descanso'; title: string; minutes: number; items: SessionItem[]};
+export type Session = {
+  day: string;
+  type: 'Fuerza' | 'Cardio' | 'Movilidad' | 'Descanso';
+  title: string;
+  minutes: number;
+  items: SessionItem[];
+  guide?: string; // id de YouTube de la rutina guiada para seguir en tiempo real
+};
 export type Habit = {id: string; label: string; detail: string};
 export type Program = {
   createdAt: string;
@@ -91,7 +100,7 @@ function strength(i: ProgramInput, week: number): SessionItem[] {
   const knees = i.limits.includes('rodillas');
   const back = i.limits.includes('espalda');
   const shoulders = i.limits.includes('hombros');
-  const s = (n: string, d: string, video?: string): SessionItem => ({name: n, detail: d, video});
+  const s = (n: string, d: string): SessionItem => ({name: n, detail: d});
   if (i.place === 'gimnasio') {
     return [
       knees ? s('Puente de glúteos', `${sets}×12`) : s('Prensa de piernas', `${sets}×${reps}`),
@@ -104,8 +113,8 @@ function strength(i: ProgramInput, week: number): SessionItem[] {
   }
   if (i.level === 'inicial') {
     return [
-      knees ? s('Sentarse y levantarse de silla alta', `${sets}×6–8, rango cómodo`, '5fcd0pPWLEQ') : s('Sentarse y levantarse de una silla', `${sets}×${reps}`, '5fcd0pPWLEQ'),
-      s('Flexiones contra la pared', `${sets}×${reps}`, '23NYAAo1usA'),
+      knees ? s('Sentarse y levantarse de silla alta', `${sets}×6–8, rango cómodo`) : s('Sentarse y levantarse de una silla', `${sets}×${reps}`),
+      s('Flexiones contra la pared', `${sets}×${reps}`),
       s('Puente de glúteos', `${sets}×10`),
       s('Remo con banda elástica o mochila', `${sets}×10`),
       back ? s('Bird-dog (cuadrupedia)', `${sets}×6 por lado`) : s('Plancha apoyando rodillas', `${sets}×20 s`),
@@ -113,7 +122,7 @@ function strength(i: ProgramInput, week: number): SessionItem[] {
   }
   return [
     knees ? s('Puente de glúteos a una pierna', `${sets}×8 por lado`) : s('Sentadilla', `${sets}×${reps}`),
-    shoulders ? s('Flexiones contra la pared', `${sets}×12`, '23NYAAo1usA') : s('Flexiones inclinadas (manos en mesa)', `${sets}×${reps}`),
+    shoulders ? s('Flexiones contra la pared', `${sets}×12`) : s('Flexiones inclinadas (manos en mesa)', `${sets}×${reps}`),
     knees ? s('Elevación de talones', `${sets}×15`) : s('Zancadas hacia atrás', `${sets}×8 por lado`),
     s('Remo con mochila o banda', `${sets}×12`),
     s('Puente de glúteos', `${sets}×15`),
@@ -125,21 +134,53 @@ function cardio(i: ProgramInput): SessionItem[] {
   const knees = i.limits.includes('rodillas');
   const intense = i.level === 'intermedio' && !heart;
   return [
-    {name: 'Calentamiento: caminata suave', detail: '5 min', video: 'SOUVx8oFL88'},
+    {name: 'Calentamiento: caminata suave', detail: '5 min'},
     knees
       ? {name: intense ? 'Bicicleta o elíptica a ritmo moderado' : 'Bicicleta estática o caminata suave', detail: `${Math.max(10, i.minutes - 10)} min`}
-      : {name: intense ? 'Caminata rápida con intervalos (2 min rápido / 2 min suave)' : 'Caminata a ritmo conversacional', detail: `${Math.max(10, i.minutes - 10)} min`, video: 'SOUVx8oFL88'},
-    {name: 'Vuelta a la calma y estiramiento de pantorrillas', detail: '5 min', video: 'qxVUlsEeDbM'},
+      : {name: intense ? 'Caminata rápida con intervalos (2 min rápido / 2 min suave)' : 'Caminata a ritmo conversacional', detail: `${Math.max(10, i.minutes - 10)} min`},
+    {name: 'Vuelta a la calma y estiramiento de pantorrillas', detail: '5 min'},
   ];
 }
-function mobility(): SessionItem[] {
-  return [
-    {name: 'Movilidad de hombros', detail: '5 min', video: 'bFWrgXEJ3rQ'},
-    {name: 'Equilibrio con apoyo en silla', detail: '3×30 s por pierna', video: 'sLhdz-cGz3U'},
+function mobility(i: ProgramInput): SessionItem[] {
+  const items: SessionItem[] = [
+    {name: 'Movilidad de hombros', detail: '5 min'},
+    {name: 'Equilibrio con apoyo en silla', detail: '3×30 s por pierna'},
     {name: 'Gato-vaca (movilidad de columna)', detail: '2×8 lento'},
-    {name: 'Estiramiento de pantorrillas', detail: '2×20 s por lado', video: 'qxVUlsEeDbM'},
-    {name: 'Respiración profunda', detail: '2 min'},
   ];
+  if (i.limits.includes('espalda')) items.push({name: 'Ejercicios suaves para la zona lumbar', detail: '6–8 min, sin dolor', video: ROUTINES.espalda.id});
+  if (i.limits.includes('rodillas')) items.push({name: 'Fortalecimiento suave de rodillas', detail: '5 min, sin dolor', video: ROUTINES.rodillasCorto.id});
+  items.push({name: 'Estiramiento de pantorrillas', detail: '2×20 s por lado'}, {name: 'Respiración diafragmática', detail: '2 min'});
+  return items;
+}
+
+const warmUp = (): SessionItem => ({name: 'Calentamiento sin saltos', detail: '5 min'});
+const coolDown = (): SessionItem => ({name: 'Estiramiento final', detail: '3–5 min'});
+
+/** Rutina guiada (video para seguir en tiempo real) según el tipo de sesión y el perfil. */
+export function guideFor(type: Session['type'], i: ProgramInput): string {
+  const knees = i.limits.includes('rodillas');
+  const back = i.limits.includes('espalda');
+  const heart = i.limits.includes('corazon');
+  const senior = i.age >= 60;
+  if (type === 'Fuerza') {
+    if (i.place === 'gimnasio') return ROUTINES.gimnasio.id;
+    return i.level === 'inicial' && (knees || senior || heart) ? ROUTINES.fuerzaSilla.id : ROUTINES.fuerzaCasa.id;
+  }
+  if (type === 'Cardio') {
+    if (heart || i.level === 'inicial') return ROUTINES.caminata20.id;
+    if (knees) return ROUTINES.caminata20.id;
+    return i.goal === 'energia' ? ROUTINES.cardioSinSaltos.id : ROUTINES.caminata30.id;
+  }
+  if (type === 'Movilidad') {
+    if (back) return ROUTINES.espalda.id;
+    return senior || knees ? ROUTINES.equilibrio.id : ROUTINES.yoga.id;
+  }
+  return ROUTINES.estiramiento10.id;
+}
+
+/** Asigna a cada actividad su video de técnica en español (si no trae uno). */
+function withVideos(items: SessionItem[]): SessionItem[] {
+  return items.map(it => (it.video ? it : {...it, video: videoFor(it.name)?.id}));
 }
 
 function weekTemplate(i: ProgramInput): Session[] {
@@ -154,7 +195,14 @@ function weekTemplate(i: ProgramInput): Session[] {
   const order = typesByGoal[i.goal];
   // Asegura al menos una sesión de fuerza con 2 días (recomendación OMS: fuerza ≥2 días/semana cuando sea posible)
   const chosen = n === 2 ? ['Fuerza', 'Cardio'] : order.slice(0, n);
-  const week: Session[] = DAYS.map(day => ({day, type: 'Descanso', title: 'Descanso activo', minutes: 15, items: [{name: 'Paseo suave opcional', detail: '10–15 min'}, {name: 'Dormir 7–8 horas', detail: 'Recuperación'}]}));
+  const week: Session[] = DAYS.map(day => ({
+    day,
+    type: 'Descanso',
+    title: 'Descanso activo',
+    minutes: 15,
+    items: withVideos([{name: 'Paseo suave opcional', detail: '10–15 min'}, {name: 'Estiramiento final', detail: '5–10 min, opcional'}, {name: 'Dormir 7–8 horas', detail: 'Recuperación'}]),
+    guide: guideFor('Descanso', i),
+  }));
   slots[n].forEach((d, k) => {
     const type = chosen[k] as Session['type'];
     week[d] = {
@@ -162,7 +210,8 @@ function weekTemplate(i: ProgramInput): Session[] {
       type,
       title: type === 'Fuerza' ? (i.place === 'gimnasio' ? 'Fuerza en gimnasio' : 'Fuerza en casa') : type === 'Cardio' ? 'Cardio' : 'Movilidad y equilibrio',
       minutes: type === 'Movilidad' ? Math.min(20, i.minutes) : i.minutes,
-      items: type === 'Fuerza' ? strength(i, 1) : type === 'Cardio' ? cardio(i) : mobility(),
+      items: withVideos(type === 'Fuerza' ? [warmUp(), ...strength(i, 1), coolDown()] : type === 'Cardio' ? cardio(i) : mobility(i)),
+      guide: guideFor(type, i),
     };
   });
   return week;
