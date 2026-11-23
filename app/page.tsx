@@ -35,7 +35,7 @@ function PersonalDashboard({profile,user}:{profile:FamilyProfile;user:User}){
  setSyncStatus('Datos privados sincronizados');setReady(true);
  })();return()=>{cancelled=true};},[user.id]);
  useEffect(()=>{if(!ready)return;const supabase=getSupabase();if(!supabase)return;
- const timeout=setTimeout(async()=>{setSyncStatus('Guardando...');const {error}=await supabase.from('wellness_data').upsert({user_id:user.id,weights,checks,favorites,exercises_done:exerciseDone,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+ const timeout=setTimeout(async()=>{setSyncStatus('Guardando...');const {error}=await supabase.from('wellness_data').upsert({user_id:user.id,weights,checks:checked,favorites,exercises_done:exerciseDone,updated_at:new Date().toISOString()},{onConflict:'user_id'});
  setSyncStatus(error?'No se pudo guardar: '+error.message:'Datos privados sincronizados')},600);
  return()=>clearTimeout(timeout);
  },[weights,checked,favorites,exerciseDone,ready,user.id]);
