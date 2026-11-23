@@ -31,6 +31,13 @@ Abre http://localhost:3000. Para producción, `npm run build && npm start`, o im
 - **Reproductor**: YouTube sin cookies (`youtube-nocookie.com`) o MP4 de wger, siempre dentro de la app, con crédito del canal y botón "Abrir en YouTube" / "Ver fuente original".
 - Opcional `YOUTUBE_API_KEY` (YouTube Data API v3, gratuita): busca y reproduce dentro de la app un video en español para cualquier ejercicio sin video propio.
 
+## Podcasts en streaming y radio en directo
+
+- **Catálogo** (`lib/podcasts.ts`): 13 podcasts de bienestar en español elegidos según los rankings de Apple Podcasts Chile (Salud y fitness), iVoox y Feedspot: Entiende Tu Mente, Psicología al Desnudo, Somos Estupendas, Píldoras de Psicología, VE A TERAPIA, Durmiendo, Medita Podcast, Radio Fitness Revolucionario, Supracortical, Mi Dieta Cojea, Biopotencial, Por el Placer de Vivir y Se Regalan Dudas.
+- **`/api/podcasts`**: lee el RSS oficial de cada podcast (solo el comienzo del feed) y entrega las novedades de las últimas 2 semanas agrupadas por día. Caché de 3 h en servidor/CDN, así el historial de episodios se renueva solo cada día; `?show=id&page=` entrega el historial completo de un podcast.
+- **`/api/live`**: 6 radios 24/7 (lluvia, naturaleza, meditación, ambiente, chill para caminar, lo-fi) verificadas en radio-browser.info; la URL se refresca a diario.
+- **Reproductor global** (`lib/player.ts`, `components/PlayerBar.tsx`): se escucha dentro de la app y sigue sonando al cambiar de sección; ±15/30 s, velocidad, controles en la pantalla de bloqueo (Media Session), retoma donde quedaste y guarda tu historial en el dispositivo. Cada episodio y radio tiene su enlace para abrirlo afuera. Se pausa solo al usar la voz o abrir un video.
+
 ## Voz natural
 
 - Motor propio (`lib/speech.ts`): elige la voz en español más natural del dispositivo (voces “Natural/Online” de Edge, “Mejoradas/Premium” de Apple, Google español) y descarta voces robóticas; velocidad pausada por defecto (0,85) y ajustable; lee frase por frase con pausas naturales; normaliza medidas (“1/2 taza” → “media taza”, “2×8” → “2 series de 8”, “25–30 min” → “25 a 30 minutos”).

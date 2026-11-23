@@ -1,5 +1,5 @@
 /* Vida Activa AI PWA — cache only public shell pages; never cache API or personal data */
-const VERSION = 'vida-activa-shell-v1';
+const VERSION = 'vida-activa-shell-v2';
 const SHELL = ['/', '/offline'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

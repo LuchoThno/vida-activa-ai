@@ -13,6 +13,8 @@ import ExercisesView from '../components/ExercisesView';
 import ProgramView, {Ring} from '../components/ProgramView';
 import CaloriesView, {totals, type FoodLog} from '../components/CaloriesView';
 import {VideoModal} from '../components/Video';
+import PodcastsView from '../components/PodcastsView';
+import {PlayerBar} from '../components/PlayerBar';
 import {compliance, todayISO, type HabitLog, type Program, type SessionLog} from '../lib/program';
 
 type Weight = {date: string; kg: number};
@@ -38,11 +40,6 @@ const reflections = [
   {author: 'Brené Brown', theme: 'Autocompasión', message: 'El progreso no exige perfección. Puedes reconocer tus errores, tratarte con respeto, y seguir avanzando.'},
   {author: 'Stephen Covey', theme: 'Decisiones cotidianas', message: 'Concéntrate en lo que sí puedes hacer hoy: preparar una comida rica, caminar unos minutos, o descansar a tiempo.'},
   {author: 'Angela Duckworth', theme: 'Constancia', message: 'Tu valor no depende de qué tan rápido avances. La constancia también se construye con pausas, ajustes, y nuevos intentos.'},
-];
-const podcasts = [
-  {title: 'Entiende tu mente', topic: 'Psicología cotidiana y hábitos', desc: 'Conversaciones breves para comprender emociones, decisiones y bienestar.', url: 'https://entiendetumente.info/', tag: 'Hábitos'},
-  {title: 'Psicología al Desnudo', topic: 'Salud emocional y autoconocimiento', desc: 'Episodios de Marina Mammoliti sobre emociones, vínculos y bienestar.', url: 'https://www.psimammoliti.com/recursos/podcasts', tag: 'Autoconocimiento'},
-  {title: 'Se Regalan Dudas', topic: 'Crecimiento personal', desc: 'Diálogos sobre amor propio, bienestar emocional y relaciones.', url: 'https://www.seregalandudas.com/', tag: 'Bienestar'},
 ];
 
 const formatKg = (n: number) => n.toLocaleString('es-CL', {maximumFractionDigits: 1});
@@ -458,7 +455,7 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
                 <h1>
                   Tu bienestar también <em>se escucha.</em>
                 </h1>
-                <p className="lead">Reflexiones breves narradas con voz cálida y pausada, más podcasts en español sobre hábitos y bienestar.</p>
+                <p className="lead">Reflexiones narradas, radios en directo y los podcasts de bienestar más escuchados en español, para escuchar aquí mismo. Los episodios nuevos aparecen cada día.</p>
               </header>
               <section className="quote-card">
                 <div className="quote-top">
@@ -487,31 +484,7 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
               <div className="panel voice-panel">
                 <VoiceSettings />
               </div>
-              <div className="section-head">
-                <div>
-                  <div className="eyebrow">Podcasts en español</div>
-                  <h2>Escucha y aprende a tu ritmo</h2>
-                </div>
-              </div>
-              <div className="grid">
-                {podcasts.map(p => (
-                  <article className="card podcast" key={p.title}>
-                    <div className="card-body">
-                      <div className="pod-icon">
-                        <Headphones size={22} />
-                      </div>
-                      <span className="pill">{p.tag}</span>
-                      <h3>{p.title}</h3>
-                      <p className="meta">{p.topic}</p>
-                      <p className="desc">{p.desc}</p>
-                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="link-btn">
-                        Escuchar en la plataforma <ExternalLink size={14} />
-                      </a>
-                    </div>
-                  </article>
-                ))}
-              </div>
-              <p className="fine">Los podcasts pertenecen a sus creadores; abrimos sus sitios oficiales. Estas reflexiones son apoyo para hábitos saludables, no un tratamiento psicológico.</p>
+              <PodcastsView />
             </>
           )}
         </div>
@@ -527,6 +500,7 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
       </nav>
       <AudioBar />
       <VideoModal />
+      <PlayerBar />
     </div>
   );
 }
