@@ -1,10 +1,11 @@
 'use client';
 import {useEffect, useRef, useState} from 'react';
-import {ArrowUpRight, ChefHat, Globe2, Heart, Info, Loader2, Search, Shuffle, Utensils, Video, X} from 'lucide-react';
+import {ArrowUpRight, ChefHat, Globe2, Heart, Info, Loader2, Search, Shuffle, Utensils, X} from 'lucide-react';
 import type {Recipe, RecipeSummary} from '../lib/recipe-types';
 import {RECIPE_SHORTCUTS} from '../lib/food-dictionary';
 import {ListenButton} from './Audio';
 import {stopSpeech} from '../lib/speech';
+import {VideoButton, youtubeId} from './Video';
 
 const safeLink = (url: string) => (/^https:\/\//i.test(url) ? url : '#');
 
@@ -231,10 +232,14 @@ export default function RecipesView({favorites, onToggleFavorite}: {favorites: s
                 <ListenButton text={recipeSpeech} label={'Receta: ' + selected.title} className="btn btn-primary">
                   Escuchar receta
                 </ListenButton>
-                {selected.video && (
-                  <a className="btn btn-soft" href={safeLink(selected.video)} target="_blank" rel="noopener noreferrer">
-                    <Video size={17} /> Ver video
-                  </a>
+                {selected.video && youtubeId(selected.video) ? (
+                  <VideoButton className="btn btn-soft" req={{title: selected.title, youtube: youtubeId(selected.video)}}>
+                    Ver video aquí
+                  </VideoButton>
+                ) : (
+                  <VideoButton className="btn btn-soft" req={{title: selected.title, query: 'receta ' + selected.title}}>
+                    Buscar video
+                  </VideoButton>
                 )}
                 {selected.source && (
                   <a className="btn btn-ghost" href={safeLink(selected.source)} target="_blank" rel="noopener noreferrer">

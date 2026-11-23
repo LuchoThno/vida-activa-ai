@@ -17,6 +17,17 @@ Abre http://localhost:3000. Para producción, `npm run build && npm start`, o im
   - Traducción: OpenAI (`OPENAI_API_KEY`) si está configurada; si no, MyMemory (gratuito). Cada fragmento se guarda en la caché de Vercel 30 días, así cada receta se traduce una sola vez. `MYMEMORY_EMAIL` amplía la cuota gratuita.
 - **Ejercicios — wger.de en español**: `/api/exercises?q=&category=&bodyweight=1&page=` usa las ~650 traducciones oficiales al español de la comunidad wger, con imagen, video, categoría y equipamiento en español, búsqueda, filtros y paginación (caché 24 h). Licencia CC-BY-SA.
 
+## Programa de metas y contador de calorías
+
+- **Mi programa** (`lib/program.ts`): asistente que calcula calorías diarias (Mifflin-St Jeor, déficit máximo de 500 kcal y mínimo de 1.200/1.500 kcal), proteínas, carbohidratos, grasas, agua y pasos; arma la semana de entrenamiento según días, minutos, nivel, lugar y molestias (rodillas, espalda, hombros, corazón); hábitos diarios, hitos cada 4 semanas, fases de progresión y puntaje de cumplimiento con racha. No acepta metas bajo un IMC de 18,5 ni menores de 18 años.
+- **Calorías**: registro por comida (desayuno, almuerzo, once, cena, colaciones) con ~90 alimentos chilenos comunes (`lib/foods.ts`) + productos envasados de Open Food Facts (`/api/foods`), lector de código de barras en Android/Chrome, entrada manual y tendencia de 7 días.
+- Se guarda en la columna `extras` (jsonb) de `wellness_data`. Si la columna no existe, la app guarda en el dispositivo y avisa. Migración: `alter table public.wellness_data add column if not exists extras jsonb not null default '{}'::jsonb;`
+
+## Videos dentro de la app
+
+- Reproductor integrado (YouTube sin cookies o MP4 de wger). Las recetas usan el video de TheMealDB; las guías iniciales y el programa tienen videos en español seleccionados.
+- Opcional `YOUTUBE_API_KEY` (YouTube Data API v3, gratuita): busca y reproduce dentro de la app un video en español para cualquier ejercicio que no tenga uno propio.
+
 ## Voz natural
 
 - Motor propio (`lib/speech.ts`): elige la voz en español más natural del dispositivo (voces “Natural/Online” de Edge, “Mejoradas/Premium” de Apple, Google español) y descarta voces robóticas; velocidad pausada por defecto (0,85) y ajustable; lee frase por frase con pausas naturales; normaliza medidas (“1/2 taza” → “media taza”, “2×8” → “2 series de 8”, “25–30 min” → “25 a 30 minutos”).

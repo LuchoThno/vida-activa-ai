@@ -1,8 +1,9 @@
 'use client';
 import {useEffect, useRef, useState} from 'react';
-import {ArrowUpRight, Check, ChevronDown, Dumbbell, Info, Search, Timer, Video} from 'lucide-react';
+import {ArrowUpRight, Check, ChevronDown, Dumbbell, Info, Search, Timer} from 'lucide-react';
 import {guidedExercises} from '../lib/exercises';
 import {ListenButton} from './Audio';
+import {VideoButton} from './Video';
 
 type WebExercise = {id: string; title: string; description: string; steps: string[]; image: string; video: string; category: string; equipment: string; source: string};
 const safeLink = (url: string) => (/^https:\/\//i.test(url) ? url : '#');
@@ -134,9 +135,7 @@ export default function ExercisesView({done, onToggleDone}: {done: string[]; onT
                     </ListenButton>
                   </div>
                   <div className="card-actions">
-                    <a className="link-btn" href={'https://www.youtube.com/results?search_query=' + encodeURIComponent(e.videoSearch)} target="_blank" rel="noopener noreferrer">
-                      <Video size={15} /> Videos en YouTube
-                    </a>
+                    <VideoButton req={{title: e.title, youtube: e.youtube, query: e.videoSearch}}>Ver video</VideoButton>
                     <button className={'done-btn' + (isDone ? ' on' : '')} onClick={() => onToggleDone(e.id)}>
                       <Check size={15} /> {isDone ? 'Completado' : 'Marcar hecho'}
                     </button>
@@ -187,9 +186,7 @@ export default function ExercisesView({done, onToggleDone}: {done: string[]; onT
             return (
               <article className={'card' + (isDone ? ' done' : '')} key={m.id}>
                 <div className="card-img contain">
-                  {isOpen && m.video ? (
-                    <video src={m.video} controls muted playsInline preload="metadata" />
-                  ) : m.image ? (
+                  {m.image ? (
                     <img src={m.image} alt={m.title} loading="lazy" referrerPolicy="no-referrer" />
                   ) : (
                     <div className="img-fallback">
@@ -225,7 +222,7 @@ export default function ExercisesView({done, onToggleDone}: {done: string[]; onT
                   <div className="card-actions">
                     {m.description && (
                       <button className="btn btn-ghost" onClick={() => setExpanded(isOpen ? null : m.id)}>
-                        {isOpen ? 'Menos' : m.video ? 'Ver más y video' : 'Ver más'} <ChevronDown size={15} className={isOpen ? 'rot' : ''} />
+                        {isOpen ? 'Menos' : 'Ver pasos'} <ChevronDown size={15} className={isOpen ? 'rot' : ''} />
                       </button>
                     )}
                     {m.description && (
@@ -235,16 +232,7 @@ export default function ExercisesView({done, onToggleDone}: {done: string[]; onT
                     )}
                   </div>
                   <div className="card-actions">
-                    <a
-                      className="link-btn"
-                      href={m.video && !isOpen ? undefined : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(m.title + ' ejercicio técnica')}
-                      onClick={m.video && !isOpen ? () => setExpanded(m.id) : undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      role="button"
-                    >
-                      <Video size={15} /> {m.video && !isOpen ? 'Ver video' : 'Videos en YouTube'}
-                    </a>
+                    <VideoButton req={m.video ? {title: m.title, mp4: m.video} : {title: m.title, query: m.title + ' ejercicio técnica correcta'}}>Ver video</VideoButton>
                     <button className={'done-btn' + (isDone ? ' on' : '')} onClick={() => onToggleDone('wger-' + m.id)}>
                       <Check size={15} /> {isDone ? 'Hecho' : 'Marcar'}
                     </button>

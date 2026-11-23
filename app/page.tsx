@@ -3,24 +3,32 @@ import {useEffect, useState} from 'react';
 import type {User} from '@supabase/supabase-js';
 import {getSupabase} from '../lib/supabase';
 import {
-  ArrowUpRight, CalendarDays, Check, Dumbbell, ExternalLink, Headphones, Heart, Info, LogOut, Plus, Scale, Settings2, Shuffle, Utensils, Volume2, Square,
+  Apple, ArrowUpRight, CalendarDays, Check, Home, Target, Dumbbell, ExternalLink, Headphones, Heart, Info, LogOut, Plus, Scale, Settings2, Shuffle, Utensils, Volume2, Square,
 } from 'lucide-react';
 import {weeklyPlan} from '../lib/exercises';
 import {setSpeechTokenProvider, speak, stopSpeech, useSpeech} from '../lib/speech';
 import {AudioBar, ListenButton, VoiceSettings} from '../components/Audio';
 import RecipesView from '../components/RecipesView';
 import ExercisesView from '../components/ExercisesView';
+import ProgramView, {Ring} from '../components/ProgramView';
+import CaloriesView, {totals, type FoodLog} from '../components/CaloriesView';
+import {VideoModal} from '../components/Video';
+import {compliance, todayISO, type HabitLog, type Program, type SessionLog} from '../lib/program';
 
 type Weight = {date: string; kg: number};
 type Profile = {id: string; name: string; initial: string};
 
 const menu = [
-  {id: 'overview', name: 'Mi progreso', short: 'Progreso', icon: Scale},
+  {id: 'overview', name: 'Inicio', short: 'Inicio', icon: Home},
+  {id: 'program', name: 'Mi programa', short: 'Programa', icon: Target},
+  {id: 'calories', name: 'Calorías', short: 'Calorías', icon: Apple},
   {id: 'recipes', name: 'Recetas', short: 'Recetas', icon: Utensils},
   {id: 'exercises', name: 'Ejercicios', short: 'Ejercicios', icon: Dumbbell},
-  {id: 'plan', name: 'Plan semanal', short: 'Plan', icon: CalendarDays},
   {id: 'motivation', name: 'Motivación y audio', short: 'Audio', icon: Headphones},
 ] as const;
+type Extras = {program: Program | null; habits: HabitLog; sessions: SessionLog; food: FoodLog};
+const EMPTY_EXTRAS: Extras = {program: null, habits: {}, sessions: {}, food: {}};
+const localExtrasKey = (id: string) => 'va-extras:' + id;
 type Tab = (typeof menu)[number]['id'];
 
 const reflections = [
@@ -89,6 +97,8 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
   const [checked, setChecked] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [exerciseDone, setExerciseDone] = useState<string[]>([]);
+  const [extras, setExtras] = useState<Extras>(EMPTY_EXTRAS);
+  const [extrasInDb, setExtrasInDb] = useState(true);
   const [weightInput, setWeightInput] = useState('');
   const [dateInput, setDateInput] = useState('');
   const [weightMsg, setWeightMsg] = useState('');
@@ -103,8 +113,22 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
     setSpeechTokenProvider(async () => (await supabase.auth.getSession()).data.session?.access_token || null);
     let cancelled = false;
     (async () => {
-      const {data, error} = await supabase.from('wellness_data').select('weights,checks,favorites,exercises_done').eq('user_id', user.id).maybeSingle();
+      let {data, error} = await supabase.from('wellness_data').select('weights,checks,favorites,exercises_done,extras').eq('user_id', user.id).maybeSingle();
+      let hasExtras = true;
+      if (error && /extras/i.test(error.message)) {
+        // la base aún no tiene la columna "extras": se guarda en este dispositivo
+        hasExtras = false;
+        ({data, error} = await supabase.from('wellness_data').select('weights,checks,favorites,exercises_done').eq('user_id', user.id).maybeSingle());
+      }
       if (cancelled) return;
+      setExtrasInDb(hasExtras);
+      let ex: Partial<Extras> | null = hasExtras ? (data as {extras?: Partial<Extras>} | null)?.extras || null : null;
+      if (!ex || !Object.keys(ex).length) {
+        try {
+          ex = JSON.parse(localStorage.getItem(localExtrasKey(user.id)) || 'null');
+        } catch {}
+      }
+      if (ex) setExtras({...EMPTY_EXTRAS, ...ex});
       if (error) {
         setSyncStatus('No se pudo cargar tu información: ' + error.message);
         return;
@@ -129,13 +153,19 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
     if (!supabase) return;
     const t = setTimeout(async () => {
       setSyncStatus('Guardando…');
-      const {error} = await supabase
-        .from('wellness_data')
-        .upsert({user_id: user.id, weights, checks: checked, favorites, exercises_done: exerciseDone, updated_at: new Date().toISOString()}, {onConflict: 'user_id'});
+      try {
+        localStorage.setItem(localExtrasKey(user.id), JSON.stringify(extras));
+      } catch {}
+      const base = {user_id: user.id, weights, checks: checked, favorites, exercises_done: exerciseDone, updated_at: new Date().toISOString()};
+      let {error} = await supabase.from('wellness_data').upsert((extrasInDb ? {...base, extras} : base) as Record<string, unknown>, {onConflict: 'user_id'});
+      if (error && extrasInDb && /extras/i.test(error.message)) {
+        setExtrasInDb(false);
+        ({error} = await supabase.from('wellness_data').upsert(base, {onConflict: 'user_id'}));
+      }
       setSyncStatus(error ? 'No se pudo guardar: ' + error.message : 'Sincronizado');
-    }, 600);
+    }, 700);
     return () => clearTimeout(t);
-  }, [weights, checked, favorites, exerciseDone, ready, user.id]);
+  }, [weights, checked, favorites, exerciseDone, extras, extrasInDb, ready, user.id]);
 
   useEffect(() => {
     stopSpeech();
@@ -149,7 +179,18 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
   const first = sorted[0]?.kg;
   const delta = current !== undefined && first !== undefined ? +(first - current).toFixed(1) : undefined;
   const todayIndex = (new Date().getDay() + 6) % 7;
-  const today = weeklyPlan[todayIndex];
+  const program = extras.program;
+  const plan = program ? program.week[todayIndex] : null;
+  const today = plan ? {day: plan.day, label: plan.title, duration: plan.type === 'Descanso' ? 'Descanso' : plan.minutes + ' min', details: plan.items.map(i => i.name).join(' · ')} : weeklyPlan[todayIndex];
+  const todayDate = todayISO();
+  const todayDone = program ? !!extras.sessions[todayDate] : checked.includes(today.day);
+  const toggleToday = () => (program ? setExtras(x => ({...x, sessions: {...x.sessions, [todayDate]: !x.sessions[todayDate]}})) : toggleIn(setChecked)(today.day));
+  const kcalToday = totals(extras.food[todayDate]).kcal;
+  const comp = program ? compliance(program, extras.habits, extras.sessions) : null;
+  const goHome = () => {
+    setTab('overview');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  };
 
   function addWeight() {
     const n = Number(weightInput.replace(',', '.'));
@@ -181,17 +222,17 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-icon">
+        <button className="brand" onClick={goHome} aria-label="Ir al inicio">
+          <span className="brand-icon">
             <Heart size={20} fill="currentColor" />
-          </div>
-          <div>
+          </span>
+          <span className="brand-text">
             <b>
               vida<span>activa</span>
             </b>
             <small>Tu bienestar, a tu ritmo</small>
-          </div>
-        </div>
+          </span>
+        </button>
         <nav aria-label="Secciones">
           {menu.map(({id, name, icon: Icon}) => (
             <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}>
@@ -206,8 +247,8 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
           <p>
             {today.duration} · {today.details}
           </p>
-          <button className="link-btn" onClick={() => setTab('plan')}>
-            Ver plan <ArrowUpRight size={14} />
+          <button className="link-btn" onClick={() => setTab('program')}>
+            {program ? 'Ver mi programa' : 'Crear mi programa'} <ArrowUpRight size={14} />
           </button>
         </div>
         <button className="side-out" onClick={onSignOut}>
@@ -217,14 +258,14 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
 
       <main>
         <header className="topbar">
-          <div className="topbar-brand">
-            <div className="brand-icon sm">
+          <button className="topbar-brand" onClick={goHome} aria-label="Ir al inicio">
+            <span className="brand-icon sm">
               <Heart size={16} fill="currentColor" />
-            </div>
+            </span>
             <b>
               vida<span>activa</span>
             </b>
-          </div>
+          </button>
           <div className="hello">
             <span className={'dot' + (syncStatus === 'Sincronizado' ? '' : ' warn')} title={syncStatus} />
             {greeting()}, <b>{profile.name}</b>
@@ -252,6 +293,11 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
         </header>
 
         <div className="content">
+          {ready && !extrasInDb && (tab === 'program' || tab === 'calories') && (
+            <div className="alert alert-warn">
+              <Info size={16} /> Tu programa y comidas se están guardando solo en este dispositivo mientras se actualiza la base de datos.
+            </div>
+          )}
           {!ready && (
             <div className="alert">
               <Info size={16} /> {syncStatus}
@@ -280,8 +326,13 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
                   <small>Hoy · {today.day}</small>
                   <strong>{today.label}</strong>
                   <span>{today.duration}</span>
-                  <button className={'done-btn light' + (checked.includes(today.day) ? ' on' : '')} onClick={() => toggleIn(setChecked)(today.day)}>
-                    <Check size={15} /> {checked.includes(today.day) ? 'Hecho hoy' : 'Marcar como hecho'}
+                  {today.duration !== 'Descanso' && (
+                    <button className={'done-btn light' + (todayDone ? ' on' : '')} onClick={toggleToday}>
+                      <Check size={15} /> {todayDone ? 'Hecho hoy' : 'Marcar como hecho'}
+                    </button>
+                  )}
+                  <button className="link-btn light" onClick={() => setTab('program')}>
+                    {program ? 'Ver sesión' : 'Crear mi programa'} <ArrowUpRight size={14} />
                   </button>
                 </div>
               </section>
@@ -304,13 +355,34 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
                 <div className="stat">
                   <span>Semana activa</span>
                   <strong>
-                    {checked.length}
-                    <small> / 7 días</small>
+                    {comp ? comp.sessionsDone : checked.length}
+                    <small> / {comp ? comp.sessionsPlanned : 7} sesiones</small>
                   </strong>
                   <div className="bar">
-                    <b style={{width: `${(checked.length / 7) * 100}%`}} />
+                    <b style={{width: `${comp ? (comp.sessionsDone / (comp.sessionsPlanned || 1)) * 100 : (checked.length / 7) * 100}%`}} />
                   </div>
                 </div>
+              </div>
+
+              <div className="two even">
+                <button className="panel mini-card" onClick={() => setTab('calories')}>
+                  <Ring value={kcalToday / (program?.kcal || 2000)} size={92} stroke={9} label={Math.round(kcalToday).toLocaleString('es-CL')} sub="kcal" />
+                  <span>
+                    <span className="eyebrow">Calorías de hoy</span>
+                    <b>{program ? `Meta: ${program.kcal.toLocaleString('es-CL')} kcal` : 'Registra lo que comes'}</b>
+                    <small>{kcalToday ? `Te quedan ${Math.max(0, Math.round((program?.kcal || 2000) - kcalToday)).toLocaleString('es-CL')} kcal` : 'Toca para agregar tu primera comida'}</small>
+                  </span>
+                  <ArrowUpRight size={18} className="muted" />
+                </button>
+                <button className="panel mini-card" onClick={() => setTab('program')}>
+                  <Ring value={(comp?.score || 0) / 100} size={92} stroke={9} label={comp ? comp.score + '%' : '—'} sub="metas" color="var(--peach)" />
+                  <span>
+                    <span className="eyebrow">Mi programa</span>
+                    <b>{comp ? `Racha de ${comp.streak} ${comp.streak === 1 ? 'día' : 'días'}` : 'Crea tu programa de metas'}</b>
+                    <small>{comp ? `${(extras.habits[todayDate] || []).length}/${program!.habits.length} hábitos hoy` : 'Calorías, entrenamiento, hábitos e hitos'}</small>
+                  </span>
+                  <ArrowUpRight size={18} className="muted" />
+                </button>
               </div>
 
               <div className="two">
@@ -365,55 +437,19 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
           {tab === 'recipes' && <RecipesView favorites={favorites} onToggleFavorite={toggleIn(setFavorites)} />}
           {tab === 'exercises' && <ExercisesView done={exerciseDone} onToggleDone={toggleIn(setExerciseDone)} />}
 
-          {tab === 'plan' && (
-            <>
-              <header className="page-head">
-                <div className="eyebrow">Movimiento semanal</div>
-                <h1>
-                  Una semana <em>a tu manera.</em>
-                </h1>
-                <p className="lead">Un punto de partida de baja intensidad, ajustable a tu condición y a tu tiempo.</p>
-              </header>
-              <div className="week-progress">
-                <div className="bar big">
-                  <b style={{width: `${(checked.length / 7) * 100}%`}} />
-                </div>
-                <span>
-                  {checked.length} de 7 días completados
-                </span>
-                {checked.length > 0 && (
-                  <button className="link-btn" onClick={() => setChecked([])}>
-                    Empezar semana nueva
-                  </button>
-                )}
-              </div>
-              <div className="schedule">
-                {weeklyPlan.map((d, i) => {
-                  const isDone = checked.includes(d.day);
-                  return (
-                    <div className={'day' + (isDone ? ' done' : '') + (i === todayIndex ? ' today' : '')} key={d.day}>
-                      <div className="day-n">{d.day.slice(0, 3)}</div>
-                      <div className="day-info">
-                        <span>
-                          {i === todayIndex ? 'Hoy · ' : ''}
-                          {d.duration}
-                        </span>
-                        <h3>{d.label}</h3>
-                        <p>{d.details}</p>
-                      </div>
-                      <ListenButton className="icon-btn" text={`${d.day}. ${d.label}. Duración: ${d.duration}. ${d.details}`} label={'Plan: ' + d.day} />
-                      <button onClick={() => toggleIn(setChecked)(d.day)} aria-label={(isDone ? 'Desmarcar ' : 'Marcar ') + d.day} className="check">
-                        {isDone && <Check size={18} />}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="alert">
-                <Info size={16} /> Rutina orientativa, no personalizada clínicamente. Ajusta según cómo te sientas y lo que indique tu equipo de salud.
-              </div>
-            </>
+          {tab === 'program' && (
+            <ProgramView
+              program={program}
+              onSave={p => setExtras(x => ({...x, program: p}))}
+              habits={extras.habits}
+              setHabits={fn => setExtras(x => ({...x, habits: fn(x.habits)}))}
+              sessions={extras.sessions}
+              setSessions={fn => setExtras(x => ({...x, sessions: fn(x.sessions)}))}
+              currentWeight={current}
+              todayKcal={kcalToday}
+            />
           )}
+          {tab === 'calories' && <CaloriesView log={extras.food} setLog={fn => setExtras(x => ({...x, food: fn(x.food)}))} program={program} onCreateProgram={() => setTab('program')} />}
 
           {tab === 'motivation' && (
             <>
@@ -490,6 +526,7 @@ function Dashboard({profile, user, onSignOut}: {profile: Profile; user: User; on
         ))}
       </nav>
       <AudioBar />
+      <VideoModal />
     </div>
   );
 }
